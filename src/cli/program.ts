@@ -21,6 +21,7 @@ export function createProgram(): Command {
     .option('--verbose', 'Enable verbose output')
     .option('--fail-below <score>', 'Exit with non-zero code if score is below threshold', parseInt)
     .action((_options: unknown) => {
+      // eslint-disable-next-line no-console
       console.log('DevGuard analyze local — not yet implemented.');
     });
 

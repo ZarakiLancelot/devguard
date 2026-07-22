@@ -11,7 +11,10 @@
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "tsc --noEmit",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "dev": "tsx src/cli/index.ts"
   },
   "engines": {
@@ -32,9 +35,15 @@
     "zod": "3.23.8"
   },
   "devDependencies": {
+    "@eslint/js": "9.8.0",
     "@types/node": "22.5.0",
+    "eslint": "9.8.0",
+    "eslint-config-prettier": "9.1.0",
+    "eslint-plugin-vitest": "0.5.4",
+    "prettier": "3.3.3",
+    "tsx": "4.17.0",
     "typescript": "5.5.4",
-    "vitest": "2.0.5",
-    "tsx": "4.17.0"
+    "typescript-eslint": "8.1.0",
+    "vitest": "2.0.5"
   }
 }
