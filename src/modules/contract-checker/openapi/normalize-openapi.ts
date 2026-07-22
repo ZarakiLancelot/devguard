@@ -1,26 +1,15 @@
-/**
- * Normalized primitive types supported by the MVP.
- */
-export type NormalizedPrimitive = 'string' | 'number' | 'boolean';
+import type {
+  NormalizedContract,
+  NormalizedPrimitive,
+  NormalizedProperty,
+} from '../shared/normalized-contract.js';
 
-/**
- * A normalized property extracted from an OpenAPI schema or TypeScript declaration.
- */
-export interface NormalizedProperty {
-  name: string;
-  type: NormalizedPrimitive;
-  isArray: boolean;
-  required: boolean;
-}
-
-/**
- * A normalized contract from an OpenAPI schema.
- */
-export interface NormalizedContract {
-  name: string;
-  source: 'openapi';
-  properties: Map<string, NormalizedProperty>;
-}
+// Re-export the normalized model for backward-compatible OpenAPI normalizer imports.
+export type {
+  NormalizedContract,
+  NormalizedPrimitive,
+  NormalizedProperty,
+} from '../shared/normalized-contract.js';
 
 /**
  * Warning produced during schema normalization.
