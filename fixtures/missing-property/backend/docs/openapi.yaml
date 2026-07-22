@@ -1,0 +1,19 @@
+openapi: 3.0.3
+info:
+  title: Customer Store API
+  version: 1.0.0
+paths: {}
+components:
+  schemas:
+    UpdateCustomerStoreRequest:
+      type: object
+      required:
+        - storeNumber
+        - modelTierId
+      properties:
+        storeNumber:
+          type: string
+        modelTierId:
+          type: integer
+        active:
+          type: boolean

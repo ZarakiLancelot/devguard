@@ -1,0 +1,18 @@
+{
+  "description": "A production TypeScript file is changed but no matching test file exists.",
+  "expectedFindings": [
+    {
+      "ruleId": "risk.missing-related-tests",
+      "severity": "warning",
+      "details": "frontend/src/services/customer-store.ts has no matching test file."
+    }
+  ],
+  "expectedWarnings": [],
+  "simulatedChangedFiles": [
+    {
+      "repositoryId": "frontend",
+      "path": "src/services/customer-store.ts",
+      "status": "modified"
+    }
+  ]
+}

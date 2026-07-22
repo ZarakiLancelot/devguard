@@ -1,0 +1,13 @@
+{
+  "description": "TypeScript declaration uses Pick and generics which are unsupported in the MVP.",
+  "expectedFindings": [
+    {
+      "ruleId": "contract.unsupported-type",
+      "severity": "warning",
+      "details": "UpdateCustomerStorePayload uses unsupported type constructs (Pick, generics)."
+    }
+  ],
+  "expectedWarnings": [
+    "TypeScript declaration UpdateCustomerStorePayload uses unsupported constructs and cannot be fully analyzed."
+  ]
+}

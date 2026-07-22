@@ -1,0 +1,23 @@
+version: 1
+
+repositories:
+  backend:
+    path: ./backend
+    baseRef: main
+    role: backend
+  frontend:
+    path: ./frontend
+    baseRef: main
+    role: frontend
+
+openapi:
+  repository: backend
+  path: docs/openapi.yaml
+
+contracts:
+  - name: UpdateCustomerStore
+    openapiSchema: UpdateCustomerStoreRequest
+    typescript:
+      repository: frontend
+      file: src/types/customer-store.ts
+      type: UpdateCustomerStorePayload

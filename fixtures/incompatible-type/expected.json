@@ -1,0 +1,11 @@
+{
+  "description": "OpenAPI defines compositeRank as integer but TypeScript defines it as string.",
+  "expectedFindings": [
+    {
+      "ruleId": "contract.incompatible-type",
+      "severity": "critical",
+      "details": "Property compositeRank: OpenAPI expects number, TypeScript has string."
+    }
+  ],
+  "expectedWarnings": []
+}

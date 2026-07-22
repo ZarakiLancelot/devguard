@@ -1,0 +1,11 @@
+{
+  "description": "OpenAPI marks storeGroup as required but TypeScript marks it optional.",
+  "expectedFindings": [
+    {
+      "ruleId": "contract.required-mismatch",
+      "severity": "high",
+      "details": "Property storeGroup is required in OpenAPI but optional in TypeScript."
+    }
+  ],
+  "expectedWarnings": []
+}

@@ -1,0 +1,26 @@
+version: 1
+
+repositories:
+  frontend:
+    path: ./frontend
+    baseRef: main
+    role: frontend
+  backend:
+    path: ./backend
+    baseRef: main
+    role: backend
+
+openapi:
+  repository: backend
+  path: docs/openapi.yaml
+
+contracts: []
+
+risk:
+  sensitivePatterns:
+    - '**/.env*'
+
+testing:
+  testPatterns:
+    - '**/*.test.ts'
+    - '**/*.spec.ts'
