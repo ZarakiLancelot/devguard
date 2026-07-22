@@ -187,3 +187,24 @@ When a task appears to require expanding the MVP:
 The project must always preserve a working local demo.
 
 A reliable offline local demonstration is the required submission target. Remote GitHub integration is roadmap-only for this hackathon.
+
+## Static Demo Page Scope
+
+The hackathon submission includes one single static HTML page hosted on S3 + CloudFront.
+
+The page is limited to:
+
+- product name, tagline, version badge;
+- install and run commands;
+- one terminal recording;
+- example report snippets;
+- link to the GitHub repository.
+
+Do not add during this submission:
+
+- VitePress, Docusaurus, or any documentation framework;
+- multiple pages, navigation, or search;
+- interactive playgrounds or live editors;
+- guides, tutorials, or API reference documentation.
+
+A full documentation site under a dedicated domain is a post-hackathon roadmap item. Do not reserve, purchase, or hardcode a domain or npm package name until the final packaging task.

@@ -19,10 +19,32 @@
 ## Internal Completion Items
 
 - [ ] Public repository URL
-- [ ] Online demo URL
+- [ ] Online demo URL (S3 + CloudFront static page)
 - [ ] Video URL
 - [ ] README completed
 - [ ] Installation instructions verified from a clean environment
 - [ ] Demo fixture verified
 - [ ] No sensitive information committed
 - [ ] Final build and tests passing
+
+## Package Distribution
+
+- [ ] npm package name verified for availability
+- [ ] `npm pack --dry-run` shows only intended files
+- [ ] Tarball installs and runs in a clean temporary project
+- [ ] Package version is `0.1.0`
+- [ ] Git tag `v0.1.0` created
+- [ ] GitHub Release created with matching version
+- [ ] Published package exposes `devguard` executable
+- [ ] README install commands use the final verified package name
+
+## Static Demo Page
+
+- [ ] Single HTML page created (no framework)
+- [ ] Product name, tagline, and version badge present
+- [ ] Install and run commands use the final published package name
+- [ ] Terminal recording embedded (GIF or asciinema)
+- [ ] Example report snippets included (contract mismatch, score, summary)
+- [ ] Link to public GitHub repository
+- [ ] Page deployed to S3 + CloudFront
+- [ ] Online demo URL accessible and renders correctly

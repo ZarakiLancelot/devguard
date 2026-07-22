@@ -558,7 +558,7 @@ Include:
 
 - problem;
 - features;
-- installation;
+- installation (using the final verified package name);
 - sample config;
 - CLI usage;
 - supported type subset;
@@ -570,13 +570,61 @@ Include:
 
 Use generated text reports or terminal captures without exposing private repositories.
 
-### Task 13.3 — Package the CLI
+### Task 13.3 — Package the CLI for public distribution
 
 Acceptance:
 
 - executable `devguard` binary entry is configured;
-- package can be installed locally;
+- initial version is `0.1.0`;
+- `npm pack --dry-run` lists only intended files;
+- `npm pack` generates a valid tarball;
+- the tarball installs cleanly in a temporary project and `devguard --help` works;
+- the package does not include secrets, generated reports, private fixtures, internal session files, or unnecessary development artifacts;
+- package name is verified against the npm registry for availability;
 - clean checkout can build and run.
+
+### Task 13.4 — Create GitHub Release
+
+Acceptance:
+
+- a Git tag matches the package version (`v0.1.0`);
+- a GitHub Release is created with the same version;
+- release notes summarize features and known limitations;
+- the tarball is attached or installation instructions reference the published package.
+
+### Task 13.5 — Create static demo page
+
+Create a single static HTML page.
+
+The page must include:
+
+- product name, one-line tagline, and npm version badge;
+- verified install and run commands using the actual published package name;
+- one recorded terminal demo (GIF or asciinema embed);
+- 3–4 short example report snippets (contract mismatch, score, summary);
+- a link to the public GitHub repository.
+
+The page must NOT include:
+
+- a documentation framework (VitePress, Docusaurus, or similar);
+- a navigation system, search, or multiple pages;
+- interactive playgrounds or live editors;
+- guides, API reference, or versioned docs.
+
+Acceptance:
+
+- page renders correctly when opened as a local HTML file;
+- page deploys to S3 + CloudFront;
+- the online URL satisfies the "public online demo link" submission requirement;
+- no framework build step is required — single static HTML file only.
+
+### Task 13.6 — Verify installation from published package
+
+Acceptance:
+
+- installation instructions in the README use the final verified package name;
+- a fresh `npm install -g <package-name>` or `npx <package-name>` produces a working `devguard` command;
+- the demo page install commands match the README.
 
 ## Roadmap Only — GitHub Adapter
 

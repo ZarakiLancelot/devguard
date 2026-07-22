@@ -500,3 +500,40 @@ A future `GitHubPullRequestSource` will use Octokit to load:
 - base and head references.
 
 It must produce the same `RepositoryContext` consumed by the local pipeline.
+
+## 19. Package Distribution Requirements
+
+DevGuard must be distributed as a public npm-compatible package.
+
+Requirements:
+
+1. The installed executable command must be `devguard`.
+2. The npm package name will be selected after checking registry availability and may be scoped. The package name and executable name are separate decisions.
+3. The package must be validated using `npm pack --dry-run` and `npm pack`.
+4. The generated tarball must be installed and tested in a clean temporary project.
+5. A GitHub Release must be created using the same semantic version as the package and Git tag.
+6. Installation instructions must appear in the README and the static demo page, using the final verified package name once selected.
+7. The initial public MVP version is `0.1.0`.
+8. Package publication must not include secrets, generated reports, private fixtures, internal session files, or unnecessary development artifacts.
+
+## 20. Static Demo Page Requirements
+
+The submission requires a single static HTML demo page hosted on S3 + CloudFront.
+
+The page must include:
+
+- product name, one-line tagline, and npm version badge;
+- the final verified install and run commands using the actual published package name;
+- the installed executable itself must remain `devguard`;
+- one recorded terminal demo (GIF or asciinema embed);
+- 3–4 short example report snippets (contract mismatch, score, summary);
+- a link to the public GitHub repository.
+
+The page must NOT include:
+
+- a documentation framework (VitePress, Docusaurus, or similar);
+- a navigation system, search, or multiple pages;
+- interactive playgrounds or live editors;
+- guides, API reference, or versioned docs.
+
+A full documentation site is a post-hackathon roadmap item.

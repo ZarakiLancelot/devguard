@@ -276,3 +276,27 @@ Only the highest-severity deduction applies per root cause.
 **Rationale:** A fixed timeout prevents DevGuard from hanging indefinitely on malformed repositories or expensive Git operations.
 
 **Consequences:** Timed-out commands terminate safely and produce a typed error. Configurable timeouts are deferred.
+
+---
+
+## ADR-025: Public CLI Package and GitHub Release
+
+**Status:** ACCEPTED
+
+**Decision:** DevGuard will be distributed as a public npm-compatible package exposing the `devguard` executable and as a versioned GitHub Release. The final npm package name will be selected after checking registry availability and may use a scope.
+
+**Rationale:** The project must be usable outside its source repository and should demonstrate a real software delivery lifecycle.
+
+**Consequences:** The package must be tested from its generated tarball in a clean environment before publication. Package version, Git tag, and GitHub Release must match. The executable name (`devguard`) remains stable regardless of the final package name.
+
+---
+
+## ADR-026: Minimal Static Demo Page Scope
+
+**Status:** ACCEPTED
+
+**Decision:** The hackathon submission includes one static HTML demo page hosted on S3 + CloudFront. A full documentation site is explicitly deferred.
+
+**Rationale:** A single static page satisfies the submission requirements for an online demo link and AWS usage without competing for time against core CLI functionality during the six-day sprint.
+
+**Consequences:** Multi-page documentation sites, search, and interactive examples are roadmap-only until after the submission.
