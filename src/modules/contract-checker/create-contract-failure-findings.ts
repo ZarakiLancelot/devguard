@@ -32,6 +32,10 @@ export type ContractFailureInput =
       declarationName?: string;
       property?: string;
       unsupportedType?: string;
+      /** Source contract in which the unsupported construct was observed. */
+      sourceType?: 'openapi' | 'typescript';
+      /** Stable warning code used when no specific unsupported type text is available. */
+      warningCode?: string;
       file?: string;
       line?: number;
     };
@@ -64,7 +68,7 @@ const RULE_DEFINITIONS: Readonly<
  */
 export function createContractFailureFinding(input: ContractFailureInput): AnalysisFinding {
   const rule = RULE_DEFINITIONS[input.kind];
-  const subject = getFailureSubject(input);
+  const identity = getFailureIdentity(input);
   const location = createLocation(input);
 
   return {
@@ -72,14 +76,14 @@ export function createContractFailureFinding(input: ContractFailureInput): Analy
       ruleId: rule.ruleId,
       repositoryId: input.repositoryId,
       ...(input.file === undefined ? {} : { file: input.file }),
-      subject,
+      subject: identity,
       discriminator: input.mappingName,
     }),
     rootCauseId: generateRootCauseId({
       repositoryId: input.repositoryId,
       ...(input.file === undefined ? {} : { file: input.file }),
       mappingName: input.mappingName,
-      subject,
+      subject: identity,
       discriminator: input.kind,
     }),
     ruleId: rule.ruleId,
@@ -116,6 +120,33 @@ function getFailureSubject(input: ContractFailureInput): string {
         'unsupported-contract-type'
       );
   }
+}
+
+/**
+ * Returns the identity components used by stable IDs and root causes.
+ */
+function getFailureIdentity(input: ContractFailureInput): string {
+  switch (input.kind) {
+    case 'schema-not-found':
+      return input.schemaName;
+    case 'typescript-type-not-found':
+      return input.declarationName;
+    case 'unsupported-type':
+      return [
+        getFailureSubject(input),
+        getUnsupportedSourceType(input),
+        input.unsupportedType ?? input.warningCode ?? 'unsupported-contract-type',
+      ].join('\x00');
+  }
+}
+
+/**
+ * Defaults unsupported conditions to TypeScript for backward-compatible Task 5.3 inputs.
+ */
+function getUnsupportedSourceType(
+  input: Extract<ContractFailureInput, { kind: 'unsupported-type' }>,
+): 'openapi' | 'typescript' {
+  return input.sourceType ?? 'typescript';
 }
 
 /**
@@ -159,7 +190,7 @@ function createDescription(input: ContractFailureInput): string {
     case 'typescript-type-not-found':
       return `Contract mapping "${input.mappingName}" could not find the configured TypeScript declaration "${input.declarationName}".`;
     case 'unsupported-type':
-      return `Contract mapping "${input.mappingName}" contains an unsupported TypeScript contract type at "${getFailureSubject(input)}".`;
+      return `Contract mapping "${input.mappingName}" contains an unsupported ${getUnsupportedSourceType(input) === 'openapi' ? 'OpenAPI' : 'TypeScript'} contract type at "${getFailureSubject(input)}".`;
   }
 }
 
@@ -190,11 +221,16 @@ function createEvidence(input: ContractFailureInput): FindingEvidence {
       };
     case 'unsupported-type':
       return {
-        expected: 'a TypeScript type in the MVP-supported contract subset',
-        actual: input.unsupportedType ?? 'unsupported TypeScript contract construct',
+        expected:
+          getUnsupportedSourceType(input) === 'openapi'
+            ? 'an OpenAPI type in the MVP-supported contract subset'
+            : 'a TypeScript type in the MVP-supported contract subset',
+        actual:
+          input.unsupportedType ??
+          `unsupported ${getUnsupportedSourceType(input)} contract construct`,
         details: {
           mappingName: input.mappingName,
-          sourceType: 'typescript',
+          sourceType: getUnsupportedSourceType(input),
           ...(input.declarationName === undefined
             ? {}
             : { declarationName: input.declarationName }),
@@ -202,6 +238,7 @@ function createEvidence(input: ContractFailureInput): FindingEvidence {
           ...(input.unsupportedType === undefined
             ? {}
             : { unsupportedType: input.unsupportedType }),
+          ...(input.warningCode === undefined ? {} : { warningCode: input.warningCode }),
         },
       };
   }
@@ -217,7 +254,9 @@ function createRecommendation(input: ContractFailureInput): string {
     case 'typescript-type-not-found':
       return `Verify that configured TypeScript declaration "${input.declarationName}" exists for contract mapping "${input.mappingName}".`;
     case 'unsupported-type':
-      return 'Replace or simplify the unsupported type using the MVP-supported primitive and primitive-array subset.';
+      return getUnsupportedSourceType(input) === 'openapi'
+        ? 'Replace or simplify the unsupported OpenAPI type using the MVP-supported primitive and primitive-array subset.'
+        : 'Replace or simplify the unsupported type using the MVP-supported primitive and primitive-array subset.';
   }
 }
 
@@ -245,9 +284,11 @@ function createMetadata(input: ContractFailureInput): Record<string, unknown> {
         contractMappingName: input.mappingName,
         repositoryId: input.repositoryId,
         failureKind: input.kind,
+        sourceType: getUnsupportedSourceType(input),
         ...(input.declarationName === undefined ? {} : { declarationName: input.declarationName }),
         ...(input.property === undefined ? {} : { property: input.property }),
         ...(input.unsupportedType === undefined ? {} : { unsupportedType: input.unsupportedType }),
+        ...(input.warningCode === undefined ? {} : { warningCode: input.warningCode }),
       };
   }
 }

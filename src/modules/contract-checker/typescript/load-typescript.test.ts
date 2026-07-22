@@ -38,6 +38,28 @@ interface InternalType {
         expect(result.declaration.properties).toHaveLength(1);
       }
     });
+    it('should load a local declaration despite an unresolved type-only import', () => {
+      const content = `
+import type { ExternalType } from './missing';
+
+export interface Book {
+  title: string;
+}`;
+      const result = loadTypeScriptDeclaration({ content }, 'Book');
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.declaration.name).toBe('Book');
+        expect(result.declaration.properties).toEqual([
+          {
+            name: 'title',
+            optional: false,
+            typeText: 'string',
+            line: 5,
+          },
+        ]);
+      }
+    });
   });
 
   describe('type alias loading', () => {

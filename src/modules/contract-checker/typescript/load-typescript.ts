@@ -117,6 +117,20 @@ export function loadTypeScriptDeclaration(
       },
     });
     sourceFile = project.createSourceFile(fileName, input.content);
+
+    const syntaxDiagnostics = project
+      .getLanguageService()
+      .compilerObject.getSyntacticDiagnostics(sourceFile.getFilePath());
+    if (syntaxDiagnostics.length > 0) {
+      return {
+        success: false,
+        error: {
+          code: 'TYPESCRIPT_PARSE_FAILED',
+          message: 'Failed to parse TypeScript source due to syntax errors',
+        },
+        warnings,
+      };
+    }
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Unknown parse error';
     return {
