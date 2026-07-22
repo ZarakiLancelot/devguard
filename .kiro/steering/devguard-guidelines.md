@@ -64,6 +64,7 @@ Do not silently add support for:
 - automatic GitHub comments;
 - source-code mutation;
 - category-specific health scores.
+- an extra-property finding for TypeScript-only properties without an approved scope change that defines its rule ID, severity, reporting behavior, and acceptance criteria.
 
 Unsupported constructs must create warnings and preserve the rest of the analysis.
 

@@ -308,8 +308,8 @@ Only the highest-severity deduction applies per root cause.
 
 **Status:** ACCEPTED
 
-**Decision:** During contract comparison, properties that exist only in the TypeScript model and are absent from the authoritative OpenAPI schema are ignored.
+**Decision:** During contract comparison, properties present only in the TypeScript model and absent from the authoritative OpenAPI schema are ignored.
 
-**Rationale:** The approved MVP focuses on backend contract requirements that the frontend must satisfy. Detecting extra frontend fields would require a new rule, severity, reporting behavior, and acceptance criteria outside the current scope.
+**Rationale:** The approved MVP focuses on backend contract requirements that the frontend must satisfy. Reporting additional TypeScript-only properties would require a new rule ID, severity, report behavior, and acceptance criteria outside the current six-day scope.
 
-**Consequences:** DevGuard may not report payload fields that the frontend sends but the backend does not define. This limitation must be documented in the README and roadmap.
+**Consequences:** DevGuard does not currently report frontend payload properties that are absent from OpenAPI. This limitation must be listed in the future README and roadmap. A configurable extra-property rule may be considered after the MVP.

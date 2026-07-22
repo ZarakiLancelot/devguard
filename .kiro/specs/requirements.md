@@ -334,6 +334,12 @@ Required rules:
 
 Property-name comparison is exact and case-sensitive in the MVP.
 
+Comparison scope:
+
+- OpenAPI is the authoritative backend contract.
+- Properties that exist only in TypeScript do not generate findings in the MVP.
+- Primitive-type differences and scalar-versus-array differences use `contract.incompatible-type`.
+
 ## 12. Test Generator Requirements
 
 The Test Generator must consume:
