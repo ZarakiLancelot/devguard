@@ -1,3 +1,4 @@
+import { realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 /**
@@ -7,6 +8,8 @@ export type PathSecurityCode =
   | 'PATH_OUTSIDE_REPOSITORY'
   | 'PATH_OUTSIDE_ALLOWED_ROOT'
   | 'OUTPUT_PATH_OUTSIDE_DIRECTORY'
+  | 'ALLOWED_ROOT_INVALID'
+  | 'PARENT_DIRECTORY_INVALID'
   | 'ABSOLUTE_PATH_NOT_ALLOWED'
   | 'INVALID_PATH';
 
@@ -168,6 +171,87 @@ export function resolveFileWithinRoot(
   }
 
   return { valid: true, resolvedPath: resolved };
+}
+
+/**
+ * Resolves an output target for runtime writing. In addition to lexical
+ * containment, this requires an existing directory root and parent directory,
+ * then checks that the parent's real path remains within the root's real path.
+ * It deliberately does not inspect the final target entry.
+ */
+export async function resolveRuntimeFileWithinRoot(
+  allowedRoot: string,
+  filePath: string,
+): Promise<PathResolutionResult> {
+  const lexicalResolution = resolveFileWithinRoot(allowedRoot, allowedRoot, filePath);
+  if (!lexicalResolution.valid) {
+    return lexicalResolution;
+  }
+
+  let rootStats: Awaited<ReturnType<typeof stat>>;
+  let realAllowedRoot: string;
+
+  try {
+    rootStats = await stat(allowedRoot);
+    realAllowedRoot = await realpath(allowedRoot);
+  } catch {
+    return {
+      valid: false,
+      error: {
+        code: 'ALLOWED_ROOT_INVALID',
+        message: 'Allowed output root must be an existing directory',
+      },
+    };
+  }
+
+  if (!rootStats.isDirectory()) {
+    return {
+      valid: false,
+      error: {
+        code: 'ALLOWED_ROOT_INVALID',
+        message: 'Allowed output root must be an existing directory',
+      },
+    };
+  }
+
+  const parentDirectory = path.dirname(lexicalResolution.resolvedPath);
+  let parentStats: Awaited<ReturnType<typeof stat>>;
+  let realParentDirectory: string;
+
+  try {
+    parentStats = await stat(parentDirectory);
+    realParentDirectory = await realpath(parentDirectory);
+  } catch {
+    return {
+      valid: false,
+      error: {
+        code: 'PARENT_DIRECTORY_INVALID',
+        message: 'Output parent directory must already exist',
+      },
+    };
+  }
+
+  if (!parentStats.isDirectory()) {
+    return {
+      valid: false,
+      error: {
+        code: 'PARENT_DIRECTORY_INVALID',
+        message: 'Output parent directory must already exist',
+      },
+    };
+  }
+
+  if (!isPathContainedInRoot(realParentDirectory, realAllowedRoot)) {
+    return {
+      valid: false,
+      error: {
+        code: 'PATH_OUTSIDE_ALLOWED_ROOT',
+        message: 'Output parent directory resolves outside the allowed root',
+      },
+    };
+  }
+
+  return lexicalResolution;
 }
 
 /**

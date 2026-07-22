@@ -1,3 +1,5 @@
+import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { describe, it, expect } from 'vitest';
 import {
@@ -6,6 +8,7 @@ import {
   resolveFileInRepository,
   resolveFileWithinRoot,
   resolveOutputFile,
+  resolveRuntimeFileWithinRoot,
 } from './path-security.js';
 
 const WORKSPACE = '/home/user/project';
@@ -273,5 +276,101 @@ describe('isPathContainedInRoot', () => {
     expect(isPathContainedInRoot(REPO_ROOT, REPO_ROOT)).toBe(true);
     expect(isPathContainedInRoot(path.join(REPO_ROOT, 'docs/file.md'), REPO_ROOT)).toBe(true);
     expect(isPathContainedInRoot('/home/user/project/api-copy/file.md', REPO_ROOT)).toBe(false);
+  });
+});
+
+async function withTemporaryOutputRoot(callback: (root: string) => Promise<void>): Promise<void> {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'devguard-output-path-'));
+
+  try {
+    await callback(root);
+  } finally {
+    await fs.chmod(root, 0o700).catch(() => undefined);
+    await fs.rm(root, { force: true, recursive: true });
+  }
+}
+
+describe('resolveRuntimeFileWithinRoot', () => {
+  it('accepts a new target in an existing nested parent without creating directories', async () => {
+    await withTemporaryOutputRoot(async (root) => {
+      const nestedParent = path.join(root, 'reports', 'daily');
+      await fs.mkdir(nestedParent, { recursive: true });
+
+      const result = await resolveRuntimeFileWithinRoot(root, 'reports/daily/report.json');
+
+      expect(result).toEqual({
+        valid: true,
+        resolvedPath: path.join(nestedParent, 'report.json'),
+      });
+      await expect(fs.access(path.join(nestedParent, 'report.json'))).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
+    });
+  });
+
+  it('rejects lexical escapes before filesystem access', async () => {
+    await withTemporaryOutputRoot(async (root) => {
+      const result = await resolveRuntimeFileWithinRoot(root, '../outside/report.json');
+
+      expect(result).toMatchObject({
+        valid: false,
+        error: { code: 'PATH_OUTSIDE_ALLOWED_ROOT' },
+      });
+    });
+  });
+
+  it('rejects a missing or non-directory allowed root with safe deterministic errors', async () => {
+    await withTemporaryOutputRoot(async (root) => {
+      const rootFile = path.join(root, 'not-a-directory');
+      await fs.writeFile(rootFile, 'file', 'utf8');
+
+      await expect(
+        resolveRuntimeFileWithinRoot(path.join(root, 'missing'), 'report.md'),
+      ).resolves.toMatchObject({
+        valid: false,
+        error: { code: 'ALLOWED_ROOT_INVALID' },
+      });
+      await expect(resolveRuntimeFileWithinRoot(rootFile, 'report.md')).resolves.toMatchObject({
+        valid: false,
+        error: { code: 'ALLOWED_ROOT_INVALID' },
+      });
+    });
+  });
+
+  it('rejects a missing or non-directory target parent', async () => {
+    await withTemporaryOutputRoot(async (root) => {
+      const parentFile = path.join(root, 'parent-file');
+      await fs.writeFile(parentFile, 'file', 'utf8');
+
+      await expect(resolveRuntimeFileWithinRoot(root, 'missing/report.md')).resolves.toMatchObject({
+        valid: false,
+        error: { code: 'PARENT_DIRECTORY_INVALID' },
+      });
+      await expect(
+        resolveRuntimeFileWithinRoot(root, 'parent-file/report.md'),
+      ).resolves.toMatchObject({
+        valid: false,
+        error: { code: 'PARENT_DIRECTORY_INVALID' },
+      });
+    });
+  });
+
+  it('rejects a lexical in-root parent symlink that resolves outside the allowed root', async () => {
+    await withTemporaryOutputRoot(async (root) => {
+      const outsideRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'devguard-output-outside-'));
+      await fs.symlink(outsideRoot, path.join(root, 'escaped-parent'));
+
+      try {
+        const result = await resolveRuntimeFileWithinRoot(root, 'escaped-parent/report.md');
+
+        expect(result).toMatchObject({
+          valid: false,
+          error: { code: 'PATH_OUTSIDE_ALLOWED_ROOT' },
+        });
+        expect(JSON.stringify(result)).not.toContain(outsideRoot);
+      } finally {
+        await fs.rm(outsideRoot, { force: true, recursive: true });
+      }
+    });
   });
 });
