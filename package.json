@@ -1,0 +1,40 @@
+{
+  "name": "devguard",
+  "version": "1.0.0",
+  "description": "Developer productivity CLI for preventive code-review analysis",
+  "type": "module",
+  "main": "dist/cli/index.js",
+  "bin": {
+    "devguard": "dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "tsc --noEmit",
+    "dev": "tsx src/cli/index.ts"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "packageManager": "pnpm@9.15.9",
+  "keywords": [
+    "devguard",
+    "code-review",
+    "cli",
+    "openapi",
+    "typescript",
+    "contract-checking"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "commander": "12.1.0",
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "22.5.0",
+    "typescript": "5.5.4",
+    "vitest": "2.0.5",
+    "tsx": "4.17.0"
+  }
+}
