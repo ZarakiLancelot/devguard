@@ -460,12 +460,14 @@ Use a deterministic hash rather than random UUIDs for findings.
 
 For each configured mapping:
 
-1. Load the OpenAPI schema.
-2. Load the complete TypeScript file.
-3. Find the configured TypeScript declaration.
-4. Normalize both contracts.
-5. Compare normalized properties.
-6. Produce findings and warnings.
+1. Load the configured OpenAPI document and locate its schema.
+2. Load the configured TypeScript file and locate its declaration.
+3. Normalize the supported OpenAPI schema and TypeScript declaration.
+4. Convert approved recoverable contract-level failures to findings when they prevent a usable normalized contract pair.
+5. Compare normalized properties only when both normalized contracts are usable.
+6. Convert comparison differences to findings.
+
+A schema-not-found, TypeScript-type-not-found, or unsupported-type condition occurs before a usable `ContractComparisonResult` exists. It must not be sent to `createContractFindings`.
 
 ### 8.2 Normalized contract model
 
@@ -491,33 +493,47 @@ export interface NormalizedContract {
 
 OpenAPI `integer` and `number` normalize to TypeScript `number`.
 
-### 8.3 Comparison rules
+### 8.3 Finding conversion boundaries
+
+`createContractFindings` converts only `ContractDifference` values from a usable `ContractComparisonResult`. It creates deterministic findings for property-level differences and preserves their order.
+
+A separate deterministic contract-level failure converter creates `AnalysisFinding` values for the approved failures that happen before comparison. Both converters preserve the configured mapping name and repository metadata. They use stable IDs, normalized evidence, deterministic recommendations, and the public finding model without complete source content.
+
+Recoverable user-visible contract failures are represented as `AnalysisFinding` values. Parser and normalization results, including internal parser warnings, remain typed internal results until the Contract Checker orchestration converts an approved user-visible failure. Parser failures not explicitly approved as contract-level findings remain outside this boundary.
+
+### 8.4 Comparison rules
 
 For each OpenAPI property:
 
 - missing in TypeScript:
   - `contract.missing-property`;
-- normalized type differs:
+- normalized type or scalar-versus-array shape differs:
   - `contract.incompatible-type`;
 - required state differs:
   - `contract.required-mismatch`.
 
-Additional findings:
+OpenAPI is authoritative. Properties that exist only in TypeScript are ignored in the MVP.
 
-- missing OpenAPI schema;
-- missing TypeScript declaration;
-- unsupported type;
-- parser failure.
+### 8.5 Contract-level failure mappings
 
-Unsupported values must add a report warning and may add an informational finding.
+| Condition | Rule ID | Severity | Location |
+| --- | --- | --- | --- |
+| Configured OpenAPI schema is not found | `contract.schema-not-found` | `high` | OpenAPI file, when available |
+| Configured TypeScript declaration is not found | `contract.typescript-type-not-found` | `high` | Configured TypeScript file |
+| Contract type is unsupported | `contract.unsupported-type` | `warning` | TypeScript file and line, when available |
 
-### 8.4 Severity defaults
+### 8.6 Contract Checker orchestration boundary
+
+The Contract Checker application boundary connects OpenAPI loading, OpenAPI normalization, TypeScript loading, TypeScript normalization, contract comparison, difference finding conversion, and contract-level failure finding conversion. It invokes comparison only for usable normalized contracts, routes approved pre-comparison failures to the separate converter, and returns the resulting public findings to application orchestration.
+
+### 8.7 Severity defaults
 
 - required backend property missing in frontend: `high`
-- incompatible primitive type: `critical`
+- incompatible primitive type or array shape: `critical`
 - required-versus-optional mismatch: `high`
-- schema/type not found: `high`
-- unsupported construct: `warning`
+- OpenAPI schema not found: `high`
+- TypeScript declaration not found: `high`
+- unsupported contract construct: `warning`
 
 Severity must come from deterministic rules.
 

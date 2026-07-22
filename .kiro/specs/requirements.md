@@ -321,7 +321,7 @@ Initially unsupported examples include:
 type Book = Pick<ApiResponse<Normalized<Book>>, BookFields>;
 ```
 
-Unsupported constructs must generate warnings, not crashes.
+Unsupported constructs must not crash analysis.
 
 Required rules:
 
@@ -339,6 +339,34 @@ Comparison scope:
 - OpenAPI is the authoritative backend contract.
 - Properties that exist only in TypeScript do not generate findings in the MVP.
 - Primitive-type differences and scalar-versus-array differences use `contract.incompatible-type`.
+
+### 11.1 Difference findings
+
+When a usable `ContractComparisonResult` exists, `ContractDifference` values are converted into deterministic findings:
+
+- `missing-property` maps to `contract.missing-property` with `high` severity;
+- `incompatible-type` maps to `contract.incompatible-type` with `critical` severity;
+- `required-mismatch` maps to `contract.required-mismatch` with `high` severity.
+
+This conversion preserves comparison order, exact property names, mapping metadata, repository metadata, and TypeScript file metadata. Evidence and recommendations contain normalized contract values only; they must not expose complete source content.
+
+### 11.2 Contract-level failure findings
+
+The following approved recoverable user-visible conditions occur before a usable `ContractComparisonResult` exists. A separate deterministic converter, not `createContractFindings`, must convert them to `AnalysisFinding` values:
+
+| Condition | Rule ID | Severity | Location |
+| --- | --- | --- | --- |
+| Configured OpenAPI schema is not found | `contract.schema-not-found` | `high` | OpenAPI file, when available |
+| Configured TypeScript declaration is not found | `contract.typescript-type-not-found` | `high` | Configured TypeScript file |
+| Contract type is unsupported | `contract.unsupported-type` | `warning` | TypeScript file and line, when available |
+
+These findings must preserve mapping name and repository metadata and include stable IDs, evidence, and recommendations. Recoverable user-visible contract failures use the public `AnalysisFinding` model. Internal parser warnings may remain typed internal results until Contract Checker orchestration converts an approved user-visible failure. Parser failures not listed in this table remain outside this scope unless separately approved.
+
+### 11.3 Contract Checker orchestration
+
+A Contract Checker application boundary must connect OpenAPI loading, OpenAPI normalization, TypeScript loading, TypeScript normalization, normalized contract comparison, difference finding conversion, and contract-level failure finding conversion. It must invoke comparison and `createContractFindings` only when both normalized contracts are usable, and must preserve mapping and repository metadata for every result.
+
+All approved contract fixtures must run through this boundary in integration tests. Those tests must assert complete deterministic outputs, including findings, IDs, root-cause IDs, rule IDs, severity, metadata, locations, evidence, and recommendations.
 
 ## 12. Test Generator Requirements
 

@@ -207,37 +207,73 @@ Acceptance:
 
 ## Milestone 5 — Contract Checker
 
-### Task 5.1 — Implement property comparison
+### Task 5.1 — Compare normalized contracts (completed)
 
 Compare normalized OpenAPI and TypeScript contracts.
 
 Acceptance:
 
-- missing property detected;
-- incompatible primitive type detected;
-- required mismatch detected;
-- matching properties create no finding.
+- missing property differences detected;
+- incompatible primitive or scalar-versus-array type differences detected;
+- required-state differences detected;
+- matching properties produce no differences;
+- TypeScript-only properties are ignored, because OpenAPI is authoritative in the MVP.
 
-### Task 5.2 — Implement contract-level failures
+### Task 5.2 — Convert contract differences into findings (completed)
 
-Create findings for:
-
-- OpenAPI schema not found;
-- TypeScript declaration not found;
-- unsupported contract type.
+Convert the `ContractDifference` values from a usable `ContractComparisonResult` into deterministic `AnalysisFinding` values.
 
 Acceptance:
 
-- findings include rule ID, source, severity, mapping name, and location when available.
+- `missing-property` maps to `contract.missing-property` with `high` severity;
+- `incompatible-type` maps to `contract.incompatible-type` with `critical` severity;
+- `required-mismatch` maps to `contract.required-mismatch` with `high` severity;
+- findings preserve comparison order and exact property names;
+- finding IDs and root-cause IDs are deterministic;
+- findings preserve mapping, repository, and TypeScript file metadata;
+- evidence and recommendations use normalized values and do not expose complete source content.
 
-### Task 5.3 — Add contract-checker integration tests
+### Task 5.3 — Convert contract-level failures into findings
 
-Run all contract fixtures through the checker.
+Convert approved recoverable contract-level failures into deterministic `AnalysisFinding` values before comparison.
+
+These conditions occur before a usable `ContractComparisonResult` exists. They must be handled by a converter separate from `createContractFindings`:
+
+- OpenAPI schema not found: `contract.schema-not-found`, `high` severity;
+- TypeScript declaration not found: `contract.typescript-type-not-found`, `high` severity;
+- unsupported contract type: `contract.unsupported-type`, `warning` severity.
 
 Acceptance:
 
-- expected findings match exactly;
-- repeated runs are deterministic.
+- each approved recoverable user-visible failure becomes an `AnalysisFinding` with a stable ID, rule ID, `contract-checker` source, `contract` category, approved severity, mapping name, repository metadata, evidence, and recommendation;
+- schema-not-found uses the OpenAPI file location when available;
+- typescript-type-not-found uses the configured TypeScript file location;
+- unsupported-type uses the TypeScript file and line when available;
+- internal parser warnings remain internal until the Contract Checker orchestration converts an approved user-visible failure;
+- parser failures not listed above remain outside this task unless separately approved.
+
+### Task 5.4 — Add Contract Checker orchestration
+
+Define the application boundary that runs the Contract Checker for each configured mapping.
+
+Acceptance:
+
+- the boundary connects OpenAPI loading, OpenAPI normalization, TypeScript loading, TypeScript normalization, normalized contract comparison, difference finding conversion, and contract-level failure finding conversion;
+- comparison and `createContractFindings` run only when both normalized contracts are usable;
+- the separate contract-level failure converter handles approved failures before comparison;
+- the boundary preserves mapping and repository metadata for all generated findings;
+- internal parser warnings remain typed internal results until explicitly converted under the approved Task 5.3 rules.
+
+### Task 5.5 — Add Contract Checker integration tests
+
+Run all approved contract fixtures through the Contract Checker orchestration boundary.
+
+Acceptance:
+
+- complete expected findings, including IDs, root-cause IDs, rule IDs, severity, metadata, locations, evidence, and recommendations, match exactly;
+- valid contracts produce no findings;
+- approved property-difference and contract-level failure fixtures are covered;
+- repeated orchestration runs are deterministic.
 
 ## Milestone 6 — Risk Analyzer
 

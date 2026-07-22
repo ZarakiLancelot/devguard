@@ -313,3 +313,16 @@ Only the highest-severity deduction applies per root cause.
 **Rationale:** The approved MVP focuses on backend contract requirements that the frontend must satisfy. Reporting additional TypeScript-only properties would require a new rule ID, severity, report behavior, and acceptance criteria outside the current six-day scope.
 
 **Consequences:** DevGuard does not currently report frontend payload properties that are absent from OpenAPI. This limitation must be listed in the future README and roadmap. A configurable extra-property rule may be considered after the MVP.
+
+
+---
+
+## ADR-028: Contract-Level Failures Are User-Visible Findings
+
+**Status:** ACCEPTED
+
+**Decision:** Schema-not-found and TypeScript-type-not-found are high-severity contract findings. Unsupported contract types are warning-severity findings. They are generated before contract comparison by a dedicated deterministic converter.
+
+**Rationale:** These failures prevent or limit contract verification and must be visible in the same report model without creating a parallel public warning system.
+
+**Consequences:** Parser and normalization results remain typed internal results. The Contract Checker orchestration converts the approved user-visible failures into `AnalysisFinding` values with stable IDs, evidence, metadata, and locations.
