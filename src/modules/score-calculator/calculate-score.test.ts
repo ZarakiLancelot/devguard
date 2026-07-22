@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { calculateScore } from './calculate-score.js';
 import type { AnalysisFinding } from '../../types/findings.js';
 import type { ScoreBreakdown } from '../../types/reports.js';
-import { SEVERITY_DEDUCTIONS } from '../../types/scoring-helpers.js';
+import { SEVERITY_DEDUCTIONS, scoreToHealthLabel } from '../../types/scoring-helpers.js';
 
 const SOURCE_CONTENT = 'const privateSource = "do-not-copy";';
 const ABSOLUTE_PATH = '/private/workspace/Book.ts';
@@ -461,5 +461,158 @@ describe('calculateScore', () => {
       'severity',
     ]);
     expect(deduction?.points).toBe(SEVERITY_DEDUCTIONS.high);
+  });
+
+  it.each([
+    ['no findings', [], 100, 'HEALTHY'],
+    [
+      'a grouped deduction in the healthy range',
+      [
+        createFinding({ id: 'healthy-high', severity: 'high', rootCauseId: 'root-healthy' }),
+        createFinding({ id: 'healthy-warning', severity: 'warning', rootCauseId: 'root-healthy' }),
+      ],
+      90,
+      'HEALTHY',
+    ],
+    [
+      'separate grouped deductions in the review range',
+      [
+        createFinding({ id: 'review-high-one', severity: 'high', rootCauseId: 'root-review-one' }),
+        createFinding({ id: 'review-high-two', severity: 'high', rootCauseId: 'root-review-two' }),
+      ],
+      80,
+      'REVIEW',
+    ],
+    [
+      'separate grouped deductions in the high-risk range',
+      [
+        createFinding({
+          id: 'high-risk-critical-one',
+          severity: 'critical',
+          rootCauseId: 'root-high-risk-one',
+        }),
+        createFinding({
+          id: 'high-risk-critical-two',
+          severity: 'critical',
+          rootCauseId: 'root-high-risk-two',
+        }),
+      ],
+      60,
+      'HIGH_RISK',
+    ],
+    [
+      'separate grouped deductions in the critical-risk range',
+      [
+        createFinding({
+          id: 'critical-risk-one',
+          severity: 'critical',
+          rootCauseId: 'root-critical-risk-one',
+        }),
+        createFinding({
+          id: 'critical-risk-two',
+          severity: 'critical',
+          rootCauseId: 'root-critical-risk-two',
+        }),
+        createFinding({
+          id: 'critical-risk-three',
+          severity: 'critical',
+          rootCauseId: 'root-critical-risk-three',
+        }),
+      ],
+      40,
+      'CRITICAL_RISK',
+    ],
+    [
+      'a calculator score clamped at zero',
+      Array.from({ length: 6 }, (_, index) =>
+        createFinding({
+          id: `clamped-critical-${index}`,
+          severity: 'critical',
+          rootCauseId: `root-clamped-${index}`,
+        }),
+      ),
+      0,
+      'CRITICAL_RISK',
+    ],
+  ] as const)(
+    'maps calculator output for %s',
+    (_scenario, findings, expectedScore, expectedLabel) => {
+      const breakdown = calculateScore({ findings });
+      const label = scoreToHealthLabel(breakdown.finalScore);
+
+      expect(breakdown.finalScore).toBe(expectedScore);
+      expect(label).toBe(expectedLabel);
+    },
+  );
+
+  it('applies root-cause grouping before mapping the final score to a label', () => {
+    const groupedFindings = [
+      createFinding({ id: 'grouped-critical', severity: 'critical', rootCauseId: 'root-shared' }),
+      createFinding({ id: 'grouped-high', severity: 'high', rootCauseId: 'root-shared' }),
+    ];
+    const separateFindings = [
+      createFinding({
+        id: 'separate-critical',
+        severity: 'critical',
+        rootCauseId: 'root-critical',
+      }),
+      createFinding({ id: 'separate-high', severity: 'high', rootCauseId: 'root-high' }),
+    ];
+    const groupedBreakdown = calculateScore({ findings: groupedFindings });
+    const separateBreakdown = calculateScore({ findings: separateFindings });
+
+    expect(groupedBreakdown.finalScore).toBe(80);
+    expect(scoreToHealthLabel(groupedBreakdown.finalScore)).toBe('REVIEW');
+    expect(separateBreakdown.finalScore).toBe(70);
+    expect(scoreToHealthLabel(separateBreakdown.finalScore)).toBe('HIGH_RISK');
+  });
+
+  it('maps repeated and reversed calculator inputs to the same score and label', () => {
+    const findings = [
+      createFinding({
+        id: 'repeat-warning',
+        severity: 'warning',
+        rootCauseId: 'root-repeat-warning',
+      }),
+      createFinding({
+        id: 'repeat-critical',
+        severity: 'critical',
+        rootCauseId: 'root-repeat-critical',
+      }),
+      createFinding({ id: 'repeat-high', severity: 'high', rootCauseId: 'root-repeat-high' }),
+    ];
+    const firstBreakdown = calculateScore({ findings });
+    const first = {
+      finalScore: firstBreakdown.finalScore,
+      label: scoreToHealthLabel(firstBreakdown.finalScore),
+    };
+    const repeatedBreakdown = calculateScore({ findings });
+    const reversedBreakdown = calculateScore({ findings: [...findings].reverse() });
+
+    expect({
+      finalScore: repeatedBreakdown.finalScore,
+      label: scoreToHealthLabel(repeatedBreakdown.finalScore),
+    }).toEqual(first);
+    expect({
+      finalScore: reversedBreakdown.finalScore,
+      label: scoreToHealthLabel(reversedBreakdown.finalScore),
+    }).toEqual(first);
+  });
+
+  it('does not mutate findings while producing a score and health label', () => {
+    const finding = createFinding({
+      id: 'label-immutable',
+      severity: 'high',
+      rootCauseId: 'root-label-immutable',
+    });
+    const findings = [finding];
+    const before = structuredClone({ finding, findings });
+
+    const breakdown = calculateScore({ findings });
+    const label = scoreToHealthLabel(breakdown.finalScore);
+
+    expect(breakdown.finalScore).toBe(90);
+    expect(label).toBe('HEALTHY');
+    expect({ finding, findings }).toEqual(before);
   });
 });
