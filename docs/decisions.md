@@ -339,3 +339,16 @@ Only the highest-severity deduction applies per root cause.
 **Rationale:** Duplicate entries for the same file are an anomalous input that should not occur in a well-formed diff. A simple deterministic tie-break avoids undefined behavior without requiring semantic status prioritization.
 
 **Consequences:** This tie-break is arbitrary but stable and testable. It does not affect normal, well-formed changed-file inputs.
+
+
+---
+
+## ADR-031: Report Category Ordering
+
+**Status:** ACCEPTED
+
+**Decision:** The final report's global finding order uses this category rank: contract, risk, testing.
+
+**Rationale:** No committed specification defined a category precedence, despite category being a required secondary sort key in design.md §12.1. A stable explicit rank was required to keep report output deterministic.
+
+**Consequences:** The rank is currently implemented locally in `src/reports/report-builder.ts`. If a future task (such as Task 11.4 console summary) needs the same category order, it should reuse this constant rather than defining a second rank.
