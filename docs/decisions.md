@@ -352,3 +352,18 @@ Only the highest-severity deduction applies per root cause.
 **Rationale:** No committed specification defined a category precedence, despite category being a required secondary sort key in design.md §12.1. A stable explicit rank was required to keep report output deterministic.
 
 **Consequences:** The rank is currently implemented locally in `src/reports/report-builder.ts`. If a future task (such as Task 11.4 console summary) needs the same category order, it should reuse this constant rather than defining a second rank.
+
+
+---
+
+## ADR-032: Local Git Repository Validation Semantics
+
+**Status:** ACCEPTED
+
+**Decision:** Task 10.2 validates one already-resolved runtime repository path at a time. The path may name a repository root, a subdirectory within a worktree, or a symlink to either. DevGuard canonicalizes the Git top-level working-tree path with `fs.realpath` and returns that canonical path rather than the configured candidate path. Normal and linked worktrees are accepted; bare repositories are rejected because later local-source work needs a working tree.
+
+Configured `baseRef` text is preserved for report-facing traceability while its full resolved commit ID is stored separately as `baseCommit`. `headRef` is the full commit ID resolved from `HEAD`, not the symbolic string `HEAD` or a branch name. Base references reject blank, ASCII-control, NUL, and leading-dash values, then Git resolves all remaining commit-ish expressions with `^{commit}`. No custom Git-ref grammar is maintained.
+
+**Rationale:** Canonical top-level paths give later file loading one stable repository boundary without breaking documented sibling repositories. Captured full commit IDs support detached HEADs, deterministic analysis identities, and future immutable diff inputs. Narrow input prevalidation avoids ambiguous/control input and unsafe option-like values without imposing an unapproved Git-version requirement for `--end-of-options`.
+
+**Consequences:** Repository validation does not impose containment beneath the workspace, config directory, or current directory. It does not inspect a literal `.git` directory, dirty state, merge bases, shallow history, diffs, changed files, patches, or repository contents. Merge-base validation, dirty-state behavior, shallow/unrelated-history semantics, and diff execution are deferred to Task 10.3. Public validation errors use safe typed codes and do not disclose paths, refs, commands, Git output, or filesystem diagnostics.
