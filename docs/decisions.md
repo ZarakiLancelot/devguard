@@ -300,3 +300,16 @@ Only the highest-severity deduction applies per root cause.
 **Rationale:** A single static page satisfies the submission requirements for an online demo link and AWS usage without competing for time against core CLI functionality during the six-day sprint.
 
 **Consequences:** Multi-page documentation sites, search, and interactive examples are roadmap-only until after the submission.
+
+
+---
+
+## ADR-027: TypeScript-Only Properties Are Ignored in the MVP
+
+**Status:** ACCEPTED
+
+**Decision:** During contract comparison, properties that exist only in the TypeScript model and are absent from the authoritative OpenAPI schema are ignored.
+
+**Rationale:** The approved MVP focuses on backend contract requirements that the frontend must satisfy. Detecting extra frontend fields would require a new rule, severity, reporting behavior, and acceptance criteria outside the current scope.
+
+**Consequences:** DevGuard may not report payload fields that the frontend sends but the backend does not define. This limitation must be documented in the README and roadmap.

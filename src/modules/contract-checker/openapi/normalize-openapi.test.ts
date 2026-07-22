@@ -447,7 +447,7 @@ describe('normalizeOpenApiSchema', () => {
           name: 'isbn',
           type: 'string',
           isArray: false,
-          required: false,
+          required: true,
         });
       }
     });
