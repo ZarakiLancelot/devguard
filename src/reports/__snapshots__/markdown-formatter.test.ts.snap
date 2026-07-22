@@ -1,0 +1,324 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`formatMarkdown > matches the canonical full-report snapshot 1`] = `
+"# DevGuard PR Health Report
+
+## Source
+
+- Type: local
+- Label: Local Git Repositories
+- Analysis ID: analysis\\-0123456789abcdef
+- Generated At: 2026\\-07\\-22T16:30:00\\.000Z
+- Report Version: 1\\.0
+
+## Repository Comparisons
+
+- backend (backend): main → abc123
+- frontend (frontend): develop → def456
+
+## Health Score
+
+- Score: 67 / 100
+- Status: HIGH RISK
+- Initial Score: 100
+- Deducted Points: 23
+
+### Deductions
+
+- CRITICAL: 20 points — Critical contract mismatch\\. (Finding ID: finding\\-default; Root Cause: root\\-default)
+- WARNING: 3 points — Warning needs review\\. (Finding ID: finding\\-warning)
+
+## Summary
+
+- Total: 4
+- Critical: 1
+- High: 1
+- Warning: 1
+- Info: 1
+- Contract: 2
+- Risk: 1
+- Testing: 1
+
+## Findings
+
+### CRITICAL — Critical contract mismatch
+
+- Rule: contract\\.incompatible\\-type
+- Category: contract
+- Finding ID: finding\\-critical
+- Root Cause: root\\-default
+- Related Findings: finding\\-related
+- Location: frontend:src/book\\.ts:4
+
+**Description**
+
+The contract values differ\\.
+
+**Recommendation**
+
+Align the contract values\\.
+
+**Evidence**
+
+\`\`\`diff
+- Expected: string
++ Actual: number
+\`\`\`
+
+### HIGH — Sensitive file changed
+
+- Rule: risk\\.sensitive\\-file\\-change
+- Category: risk
+- Finding ID: finding\\-risk
+- Root Cause: root\\-default
+- Related Findings: finding\\-related
+- Location: backend:config/auth\\.ts
+
+**Description**
+
+The contract values differ\\.
+
+**Recommendation**
+
+Align the contract values\\.
+
+**Evidence**
+
+\`\`\`diff
+- Expected: string
++ Actual: number
+\`\`\`
+
+### WARNING — Related test missing
+
+- Rule: risk\\.missing\\-related\\-tests
+- Category: testing
+- Finding ID: finding\\-testing
+- Root Cause: root\\-default
+- Related Findings: finding\\-related
+- Location: frontend:src/book\\.ts:4
+
+**Description**
+
+The contract values differ\\.
+
+### INFO — Informational finding
+
+- Rule: contract\\.incompatible\\-type
+- Category: contract
+- Finding ID: finding\\-info
+- Root Cause: root\\-default
+- Related Findings: finding\\-related
+
+**Description**
+
+The contract values differ\\.
+
+**Recommendation**
+
+Align the contract values\\.
+
+**Evidence**
+
+\`\`\`diff
+- Expected: string
++ Actual: number
+\`\`\`
+
+## Suggested Tests
+
+### Verify request payload
+
+- Framework: vitest
+- Test ID: test\\-vitest
+- Related Findings: finding\\-default
+- File: src/book\\.test\\.ts
+
+**Rationale**
+
+The finding requires a regression scenario\\.
+
+<details>
+<summary>Generated Vitest scaffold</summary>
+
+\`\`\`typescript
+describe("book", () => {
+  it("sends title", () => {});
+});
+\`\`\`
+
+</details>
+
+### Review deployment behavior
+
+- Framework: scenario\\-only
+- Test ID: test\\-scenario
+- Related Findings: None
+
+**Rationale**
+
+The finding requires a regression scenario\\.
+
+## Warnings and Limitations
+
+- Unsupported property was skipped\\.
+- Review generated test coverage\\.
+"
+`;
+
+exports[`formatMarkdown > matches the empty-collections snapshot 1`] = `
+"# DevGuard PR Health Report
+
+## Source
+
+- Type: local
+- Label: Local Git Repositories
+- Analysis ID: analysis\\-0123456789abcdef
+- Generated At: 2026\\-07\\-22T16:30:00\\.000Z
+- Report Version: 1\\.0
+
+## Repository Comparisons
+
+_None._
+
+## Health Score
+
+- Score: 67 / 100
+- Status: HIGH RISK
+- Initial Score: 100
+- Deducted Points: 0
+
+### Deductions
+
+_None._
+
+## Summary
+
+- Total: 4
+- Critical: 1
+- High: 1
+- Warning: 1
+- Info: 1
+- Contract: 2
+- Risk: 1
+- Testing: 1
+
+## Findings
+
+_None._
+
+## Suggested Tests
+
+_None._
+
+## Warnings and Limitations
+
+_None._
+"
+`;
+
+exports[`formatMarkdown > matches the special-character and fence-safety snapshot 1`] = `
+"# DevGuard PR Health Report
+
+## Source
+
+- Type: github
+- Label: \\# heading \\*em\\* \\_under\\_ \\[link\\]\\(url\\) \\| pipe \\\`tick\\\` &lt;html&gt; 😀\\n\\\`\\\`\\\`\\n&lt;/details&gt;
+- Analysis ID: analysis\\-0123456789abcdef
+- Generated At: 2026\\-07\\-22T16:30:00\\.000Z
+- Report Version: 1\\.0
+
+## Repository Comparisons
+
+- backend (backend): main → abc123
+- frontend (frontend): develop → def456
+
+## Health Score
+
+- Score: 67 / 100
+- Status: HIGH RISK
+- Initial Score: 100
+- Deducted Points: 23
+
+### Deductions
+
+- CRITICAL: 20 points — Critical contract mismatch\\. (Finding ID: finding\\-default; Root Cause: root\\-default)
+- WARNING: 3 points — Warning needs review\\. (Finding ID: finding\\-warning)
+
+## Summary
+
+- Total: 4
+- Critical: 1
+- High: 1
+- Warning: 1
+- Info: 1
+- Contract: 2
+- Risk: 1
+- Testing: 1
+
+## Findings
+
+### HIGH — \\# heading \\*em\\* \\_under\\_ \\[link\\]\\(url\\) \\| pipe \\\`tick\\\` &lt;html&gt; 😀\\n\\\`\\\`\\\`\\n&lt;/details&gt;
+
+- Rule: contract\\.incompatible\\-type
+- Category: contract
+- Finding ID: finding\\-default
+- Root Cause: root\\-default
+- Related Findings: finding\\-related
+- Location: frontend:src/book\\.ts:4
+
+**Description**
+
+\\# heading \\*em\\* \\_under\\_ \\[link\\]\\(url\\) \\| pipe \\\`tick\\\` &lt;html&gt; 😀
+\\\`\\\`\\\`
+&lt;/details&gt;
+
+**Recommendation**
+
+\\# heading \\*em\\* \\_under\\_ \\[link\\]\\(url\\) \\| pipe \\\`tick\\\` &lt;html&gt; 😀
+\\\`\\\`\\\`
+&lt;/details&gt;
+
+**Evidence**
+
+\`\`\`\`diff
+- Expected: # heading *em* _under_ [link](url) | pipe \`tick\` &lt;html&gt; 😀
+-           \`\`\`
+-           &lt;/details&gt;
++ Actual: # heading *em* _under_ [link](url) | pipe \`tick\` &lt;html&gt; 😀
++         \`\`\`
++         &lt;/details&gt;
+\`\`\`\`
+
+## Suggested Tests
+
+### \\# heading \\*em\\* \\_under\\_ \\[link\\]\\(url\\) \\| pipe \\\`tick\\\` &lt;html&gt; 😀\\n\\\`\\\`\\\`\\n&lt;/details&gt;
+
+- Framework: jest
+- Test ID: test\\-default
+- Related Findings: finding\\-default
+
+**Rationale**
+
+\\# heading \\*em\\* \\_under\\_ \\[link\\]\\(url\\) \\| pipe \\\`tick\\\` &lt;html&gt; 😀
+\\\`\\\`\\\`
+&lt;/details&gt;
+
+<details>
+<summary>Generated Jest scaffold</summary>
+
+\`\`\`\`\`typescript
+\`\`\`\`
+</details>
+# nested fence
+\`\`\`\`\`
+
+</details>
+
+## Warnings and Limitations
+
+- \\# heading \\*em\\* \\_under\\_ \\[link\\]\\(url\\) \\| pipe \\\`tick\\\` &lt;html&gt; 😀
+  \\\`\\\`\\\`
+  &lt;/details&gt;
+"
+`;
