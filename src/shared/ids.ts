@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { SupportedTestFramework } from '../types/tests.js';
 
 /**
  * Input components for generating a stable finding ID.
@@ -36,6 +37,15 @@ export interface AnalysisIdInput {
     baseRef: string;
     headRef: string;
   }>;
+}
+
+/**
+ * Input components for generating a stable structured-test scenario ID.
+ */
+export interface TestIdInput {
+  templateId: string;
+  framework: SupportedTestFramework;
+  relatedFindingIds: readonly string[];
 }
 
 const SEPARATOR = '\x00';
@@ -122,4 +132,21 @@ export function generateAnalysisId(input: AnalysisIdInput): string {
 
   const payload = [input.configPath, repoParts].join(SEPARATOR);
   return `analysis-${hashPayload(payload)}`;
+}
+
+/**
+ * Generates a deterministic structured-test scenario ID.
+ *
+ * The ID is derived from the internal template identity, selected framework,
+ * and sorted unique related finding IDs. Including the framework keeps future
+ * Vitest and Jest generated artifacts distinct even when they address the
+ * same finding.
+ *
+ * @returns `test-<16 lowercase hex characters>`
+ */
+export function generateTestId(input: TestIdInput): string {
+  const relatedFindingIds = [...new Set(input.relatedFindingIds)].sort();
+  const payload = [input.templateId, input.framework, ...relatedFindingIds].join(SEPARATOR);
+
+  return `test-${hashPayload(payload)}`;
 }

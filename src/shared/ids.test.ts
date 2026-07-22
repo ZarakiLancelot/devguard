@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { generateFindingId, generateRootCauseId, generateAnalysisId } from './ids.js';
-import type { FindingIdInput, RootCauseIdInput, AnalysisIdInput } from './ids.js';
+import {
+  generateAnalysisId,
+  generateFindingId,
+  generateRootCauseId,
+  generateTestId,
+} from './ids.js';
+import type { AnalysisIdInput, FindingIdInput, RootCauseIdInput, TestIdInput } from './ids.js';
 
 describe('generateFindingId', () => {
   const baseInput: FindingIdInput = {
@@ -261,5 +266,42 @@ describe('generateAnalysisId', () => {
     expect(id).not.toContain('devguard');
     expect(id).not.toContain('backend');
     expect(id).not.toContain('abc123');
+  });
+});
+
+describe('generateTestId', () => {
+  const baseInput: TestIdInput = {
+    templateId: 'contract-missing-property-v1',
+    framework: 'scenario-only',
+    relatedFindingIds: ['finding-b', 'finding-a', 'finding-a'],
+  };
+
+  it('produces a stable test-prefixed ID from template, framework, and unique sorted finding IDs', () => {
+    const first = generateTestId(baseInput);
+    const reordered: TestIdInput = {
+      ...baseInput,
+      relatedFindingIds: ['finding-a', 'finding-b'],
+    };
+
+    expect(first).toMatch(/^test-[a-f0-9]{16}$/);
+    expect(first).toBe(generateTestId(baseInput));
+    expect(first).toBe(generateTestId(reordered));
+  });
+
+  it('changes when template, framework, or related findings change', () => {
+    const base = generateTestId(baseInput);
+
+    expect(generateTestId({ ...baseInput, templateId: 'contract-incompatible-type-v1' })).not.toBe(
+      base,
+    );
+    expect(generateTestId({ ...baseInput, framework: 'vitest' })).not.toBe(base);
+    expect(generateTestId({ ...baseInput, relatedFindingIds: ['finding-c'] })).not.toBe(base);
+  });
+
+  it('does not expose raw template or finding values', () => {
+    const id = generateTestId(baseInput);
+
+    expect(id).not.toContain('contract');
+    expect(id).not.toContain('finding');
   });
 });
