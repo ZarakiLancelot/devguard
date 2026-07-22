@@ -1,28 +1,40 @@
-import { compareSeverity, SEVERITY_DEDUCTIONS } from '../../types/scoring-helpers.js';
-import type { AnalysisFinding } from '../../types/findings.js';
+import { compareSeverity, maxSeverity, SEVERITY_DEDUCTIONS } from '../../types/scoring-helpers.js';
+import type { AnalysisFinding, Severity } from '../../types/findings.js';
 import type { ScoreBreakdown, ScoreDeduction } from '../../types/reports.js';
 
 const INITIAL_SCORE: ScoreBreakdown['initialScore'] = 100;
 const SAFE_RULE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/u;
 
-interface ScoredFinding {
-  finding: AnalysisFinding;
-  deduction: ScoreDeduction;
+interface GroupingIdentity {
+  key: string;
+  rootCauseId?: string;
 }
 
-/** Input for pure deterministic per-finding score calculation. */
+interface FindingGroup {
+  identity: GroupingIdentity;
+  findings: AnalysisFinding[];
+}
+
+interface AppliedDeduction {
+  deduction: ScoreDeduction;
+  representative: AnalysisFinding;
+}
+
+/** Input for pure deterministic grouped score calculation. */
 export interface CalculateScoreInput {
   findings: readonly AnalysisFinding[];
 }
 
 /**
- * Applies the configured severity deduction once per input finding.
- * Root-cause grouping and representative selection are intentionally deferred
- * to Task 8.2.
+ * Applies one severity deduction per normalized root-cause group. A non-empty
+ * rootCauseId defines a group; missing or empty rootCauseId falls back to the
+ * finding ID. The input findings remain unchanged for later reporting.
  */
 export function calculateScore(input: CalculateScoreInput): ScoreBreakdown {
-  const scoredFindings = input.findings.map(createScoredFinding).sort(compareScoredFindings);
-  const deductions = scoredFindings.map((scoredFinding) => scoredFinding.deduction);
+  const appliedDeductions = [...groupFindings(input.findings).values()]
+    .map(createAppliedDeduction)
+    .sort(compareAppliedDeductions);
+  const deductions = appliedDeductions.map((appliedDeduction) => appliedDeduction.deduction);
   const totalDeduction = deductions.reduce((total, deduction) => total + deduction.points, 0);
 
   return {
@@ -32,48 +44,123 @@ export function calculateScore(input: CalculateScoreInput): ScoreBreakdown {
   };
 }
 
-function createScoredFinding(finding: AnalysisFinding): ScoredFinding {
-  const points = SEVERITY_DEDUCTIONS[finding.severity];
+/**
+ * Uses distinct internal key namespaces so a fallback finding ID cannot collide
+ * with a non-empty rootCauseId that happens to have the same text.
+ */
+function groupFindings(findings: readonly AnalysisFinding[]): Map<string, FindingGroup> {
+  const groups = new Map<string, FindingGroup>();
+
+  for (const finding of findings) {
+    const identity = createGroupingIdentity(finding);
+    const group = groups.get(identity.key);
+
+    if (group === undefined) {
+      groups.set(identity.key, {
+        identity,
+        findings: [finding],
+      });
+      continue;
+    }
+
+    group.findings.push(finding);
+  }
+
+  return groups;
+}
+
+function createGroupingIdentity(finding: AnalysisFinding): GroupingIdentity {
+  if (finding.rootCauseId !== undefined && finding.rootCauseId !== '') {
+    return {
+      key: `root-cause\x00${finding.rootCauseId}`,
+      rootCauseId: finding.rootCauseId,
+    };
+  }
 
   return {
-    finding,
+    key: `finding\x00${finding.id}`,
+  };
+}
+
+function createAppliedDeduction(group: FindingGroup): AppliedDeduction {
+  const highestSeverity = getHighestSeverity(group.findings);
+  const representative = getRepresentativeFinding(group.findings, highestSeverity);
+  const points = SEVERITY_DEDUCTIONS[highestSeverity];
+
+  return {
+    representative,
     deduction: {
-      findingId: finding.id,
-      ...(finding.rootCauseId === undefined ? {} : { rootCauseId: finding.rootCauseId }),
-      severity: finding.severity,
+      findingId: representative.id,
+      ...(group.identity.rootCauseId === undefined
+        ? {}
+        : { rootCauseId: group.identity.rootCauseId }),
+      severity: highestSeverity,
       points,
-      reason: createReason(finding, points),
+      reason: createReason(representative, highestSeverity, points),
     },
   };
 }
 
+function getHighestSeverity(findings: readonly AnalysisFinding[]): Severity {
+  let highestSeverity: Severity = 'info';
+
+  for (const finding of findings) {
+    highestSeverity = maxSeverity(highestSeverity, finding.severity);
+  }
+
+  return highestSeverity;
+}
+
+function getRepresentativeFinding(
+  findings: readonly AnalysisFinding[],
+  highestSeverity: Severity,
+): AnalysisFinding {
+  const candidates = findings
+    .filter((finding) => finding.severity === highestSeverity)
+    .sort(compareFindings);
+  const representative = candidates[0];
+
+  if (representative === undefined) {
+    throw new Error('A non-empty finding group must have a representative');
+  }
+
+  return representative;
+}
+
 /**
- * Sorts deductions independently of input order without grouping or removing
- * duplicate findings.
+ * Sorts findings by the specified representative tie-breakers without using
+ * input order, category, or source preference.
  */
-function compareScoredFindings(left: ScoredFinding, right: ScoredFinding): number {
-  const severityOrder = compareSeverity(right.finding.severity, left.finding.severity);
+function compareFindings(left: AnalysisFinding, right: AnalysisFinding): number {
+  return (
+    compareText(left.ruleId, right.ruleId) ||
+    compareText(left.location?.repositoryId ?? '', right.location?.repositoryId ?? '') ||
+    compareText(left.location?.file ?? '', right.location?.file ?? '') ||
+    compareText(left.id, right.id) ||
+    compareText(left.rootCauseId ?? '', right.rootCauseId ?? '')
+  );
+}
+
+/** Sorts applied deductions by their selected representative and severity. */
+function compareAppliedDeductions(left: AppliedDeduction, right: AppliedDeduction): number {
+  const severityOrder = compareSeverity(right.deduction.severity, left.deduction.severity);
   if (severityOrder !== 0) {
     return severityOrder;
   }
 
   return (
-    compareText(left.finding.ruleId, right.finding.ruleId) ||
-    compareText(
-      left.finding.location?.repositoryId ?? '',
-      right.finding.location?.repositoryId ?? '',
-    ) ||
-    compareText(left.finding.location?.file ?? '', right.finding.location?.file ?? '') ||
-    compareText(left.finding.id, right.finding.id) ||
-    compareText(left.finding.rootCauseId ?? '', right.finding.rootCauseId ?? '')
+    compareFindings(left.representative, right.representative) ||
+    compareText(left.deduction.rootCauseId ?? '', right.deduction.rootCauseId ?? '')
   );
 }
 
-function createReason(finding: AnalysisFinding, points: number): string {
-  const severity = `${finding.severity[0]?.toUpperCase()}${finding.severity.slice(1)}`;
-  const ruleId = SAFE_RULE_ID.test(finding.ruleId) ? finding.ruleId : 'unrecognized-rule';
+function createReason(representative: AnalysisFinding, severity: Severity, points: number): string {
+  const severityLabel = `${severity[0]?.toUpperCase()}${severity.slice(1)}`;
+  const ruleId = SAFE_RULE_ID.test(representative.ruleId)
+    ? representative.ruleId
+    : 'unrecognized-rule';
 
-  return `${severity} finding from rule "${ruleId}" deducts ${points} points.`;
+  return `${severityLabel} finding from rule "${ruleId}" deducts ${points} points.`;
 }
 
 function compareText(left: string, right: string): number {
