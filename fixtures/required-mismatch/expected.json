@@ -4,8 +4,11 @@
     {
       "ruleId": "contract.required-mismatch",
       "severity": "high",
-      "details": "Property category is required in OpenAPI but optional in TypeScript."
+      "property": "category",
+      "repositoryId": "frontend",
+      "file": "src/types/book.ts"
     }
   ],
-  "expectedWarnings": []
+  "expectedWarnings": [],
+  "compared": true
 }

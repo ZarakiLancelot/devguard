@@ -4,10 +4,11 @@
     {
       "ruleId": "contract.unsupported-type",
       "severity": "warning",
-      "details": "UpdateBookPayload uses unsupported type constructs (Pick, generics)."
+      "logicalSubject": "UpdateBookPayload",
+      "repositoryId": "frontend",
+      "file": "src/types/book.ts"
     }
   ],
-  "expectedWarnings": [
-    "TypeScript declaration UpdateBookPayload uses unsupported constructs and cannot be fully analyzed."
-  ]
+  "expectedWarnings": [],
+  "compared": false
 }

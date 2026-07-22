@@ -60,7 +60,7 @@ The TypeScript declaration uses `Pick` with generic wrappers, which are
 explicitly outside the supported MVP subset.
 
 - **Expected findings:** `contract.unsupported-type` (warning)
-- **Expected warnings:** unsupported construct message
+- **Expected warnings:** none; the unsupported declaration is represented by the public finding
 
 ### malformed-openapi
 

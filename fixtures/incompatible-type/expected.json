@@ -4,8 +4,11 @@
     {
       "ruleId": "contract.incompatible-type",
       "severity": "critical",
-      "details": "Property pageCount: OpenAPI expects number, TypeScript has string."
+      "property": "pageCount",
+      "repositoryId": "frontend",
+      "file": "src/types/book.ts"
     }
   ],
-  "expectedWarnings": []
+  "expectedWarnings": [],
+  "compared": true
 }

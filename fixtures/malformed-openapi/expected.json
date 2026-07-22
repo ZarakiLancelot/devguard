@@ -2,6 +2,11 @@
   "description": "OpenAPI YAML is malformed and cannot be parsed.",
   "expectedFindings": [],
   "expectedWarnings": [
-    "OpenAPI document at backend/docs/openapi.yaml could not be parsed: invalid YAML syntax."
-  ]
+    {
+      "code": "OPENAPI_PARSE_FAILED",
+      "source": "openapi",
+      "file": "docs/openapi.yaml"
+    }
+  ],
+  "compared": false
 }

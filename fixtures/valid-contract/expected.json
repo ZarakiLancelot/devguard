@@ -1,5 +1,6 @@
 {
   "description": "OpenAPI and TypeScript declarations match perfectly. No contract findings expected.",
   "expectedFindings": [],
-  "expectedWarnings": []
+  "expectedWarnings": [],
+  "compared": true
 }

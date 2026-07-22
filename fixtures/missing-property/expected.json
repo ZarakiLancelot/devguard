@@ -4,8 +4,11 @@
     {
       "ruleId": "contract.missing-property",
       "severity": "high",
-      "details": "Property authorId is required in OpenAPI but missing from TypeScript."
+      "property": "authorId",
+      "repositoryId": "frontend",
+      "file": "src/types/book.ts"
     }
   ],
-  "expectedWarnings": []
+  "expectedWarnings": [],
+  "compared": true
 }
