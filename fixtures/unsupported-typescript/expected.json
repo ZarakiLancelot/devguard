@@ -4,10 +4,10 @@
     {
       "ruleId": "contract.unsupported-type",
       "severity": "warning",
-      "details": "UpdateCustomerStorePayload uses unsupported type constructs (Pick, generics)."
+      "details": "UpdateBookPayload uses unsupported type constructs (Pick, generics)."
     }
   ],
   "expectedWarnings": [
-    "TypeScript declaration UpdateCustomerStorePayload uses unsupported constructs and cannot be fully analyzed."
+    "TypeScript declaration UpdateBookPayload uses unsupported constructs and cannot be fully analyzed."
   ]
 }

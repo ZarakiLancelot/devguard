@@ -13,14 +13,14 @@ describe('loadTypeScriptDeclaration', () => {
   describe('interface loading', () => {
     it('should load an exported interface', () => {
       const content = `
-export interface CustomerStore {
+export interface Book {
   id: number;
   name: string;
 }`;
-      const result = loadTypeScriptDeclaration({ content }, 'CustomerStore');
+      const result = loadTypeScriptDeclaration({ content }, 'Book');
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.declaration.name).toBe('CustomerStore');
+        expect(result.declaration.name).toBe('Book');
         expect(result.declaration.kind).toBe('interface');
         expect(result.declaration.properties).toHaveLength(2);
       }
@@ -44,8 +44,8 @@ interface InternalType {
     it('should load an object-literal type alias', () => {
       const content = `
 export type UpdatePayload = {
-  modelTierId: number;
-  compositeRank?: number;
+  authorId: number;
+  pageCount?: number;
 };`;
       const result = loadTypeScriptDeclaration({ content }, 'UpdatePayload');
       expect(result.success).toBe(true);
@@ -275,8 +275,8 @@ export type Inter = A & B;`;
 
   describe('fixture scenarios', () => {
     it('should load the valid-contract fixture', () => {
-      const content = loadFixtureTs('valid-contract', 'frontend/src/types/customer-store.ts');
-      const result = loadTypeScriptDeclaration({ content }, 'UpdateCustomerStorePayload');
+      const content = loadFixtureTs('valid-contract', 'frontend/src/types/book.ts');
+      const result = loadTypeScriptDeclaration({ content }, 'UpdateBookPayload');
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.declaration.kind).toBe('type-alias');
@@ -285,31 +285,28 @@ export type Inter = A & B;`;
     });
 
     it('should load the incompatible-type fixture', () => {
-      const content = loadFixtureTs('incompatible-type', 'frontend/src/types/customer-store.ts');
-      const result = loadTypeScriptDeclaration({ content }, 'UpdateCustomerStorePayload');
+      const content = loadFixtureTs('incompatible-type', 'frontend/src/types/book.ts');
+      const result = loadTypeScriptDeclaration({ content }, 'UpdateBookPayload');
       expect(result.success).toBe(true);
       if (result.success) {
-        const compositeRank = result.declaration.properties.find((p) => p.name === 'compositeRank');
-        expect(compositeRank?.typeText).toBe('string');
+        const pageCount = result.declaration.properties.find((p) => p.name === 'pageCount');
+        expect(pageCount?.typeText).toBe('string');
       }
     });
 
     it('should load the required-mismatch fixture', () => {
-      const content = loadFixtureTs('required-mismatch', 'frontend/src/types/customer-store.ts');
-      const result = loadTypeScriptDeclaration({ content }, 'UpdateCustomerStorePayload');
+      const content = loadFixtureTs('required-mismatch', 'frontend/src/types/book.ts');
+      const result = loadTypeScriptDeclaration({ content }, 'UpdateBookPayload');
       expect(result.success).toBe(true);
       if (result.success) {
-        const storeGroup = result.declaration.properties.find((p) => p.name === 'storeGroup');
-        expect(storeGroup?.optional).toBe(true);
+        const category = result.declaration.properties.find((p) => p.name === 'category');
+        expect(category?.optional).toBe(true);
       }
     });
 
     it('should return controlled result for unsupported-typescript fixture', () => {
-      const content = loadFixtureTs(
-        'unsupported-typescript',
-        'frontend/src/types/customer-store.ts',
-      );
-      const result = loadTypeScriptDeclaration({ content }, 'UpdateCustomerStorePayload');
+      const content = loadFixtureTs('unsupported-typescript', 'frontend/src/types/book.ts');
+      const result = loadTypeScriptDeclaration({ content }, 'UpdateBookPayload');
       expect(result.success).toBe(false);
       if (!result.success) {
         expect(result.error.code).toBe('TYPESCRIPT_DECLARATION_UNSUPPORTED');
@@ -329,10 +326,10 @@ export type Inter = A & B;`;
 
     it('should propagate fileName', () => {
       const content = `export type T = { x: number; };`;
-      const result = loadTypeScriptDeclaration({ content, fileName: 'customer-store.ts' }, 'T');
+      const result = loadTypeScriptDeclaration({ content, fileName: 'book.ts' }, 'T');
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.declaration.fileName).toBe('customer-store.ts');
+        expect(result.declaration.fileName).toBe('book.ts');
       }
     });
 

@@ -93,13 +93,13 @@ describe('normalizeTypeScriptDeclaration', () => {
     it('should preserve exact property names', () => {
       const declaration = loadDeclaration(`
 export type Payload = {
-  store_Number: string;
-  modelTierId: number;
+  book_Code: string;
+  authorId: number;
 };`);
       const result = normalizeTypeScriptDeclaration(declaration);
       expect(result.success).toBe(true);
       if (result.success) {
-        expect([...result.contract.properties.keys()]).toEqual(['store_Number', 'modelTierId']);
+        expect([...result.contract.properties.keys()]).toEqual(['book_Code', 'authorId']);
       }
     });
 
@@ -124,7 +124,7 @@ export type Payload = {
 
   describe('unsupported property types', () => {
     it.each([
-      ['custom named type', 'CustomerStore'],
+      ['custom named type', 'Book'],
       ['object literal type', '{ street: string }'],
       ['union type', 'string | number'],
       ['tuple type', '[string, number]'],
@@ -148,7 +148,7 @@ export type Payload = {
     it.each([
       ['string[][]', 'TYPESCRIPT_NESTED_ARRAY_UNSUPPORTED'],
       ['Array<Array<string>>', 'TYPESCRIPT_NESTED_ARRAY_UNSUPPORTED'],
-      ['Array<CustomerStore>', 'TYPESCRIPT_ARRAY_ELEMENT_UNSUPPORTED'],
+      ['Array<Book>', 'TYPESCRIPT_ARRAY_ELEMENT_UNSUPPORTED'],
       ['ReadonlyArray<Record<string, string>>', 'TYPESCRIPT_ARRAY_ELEMENT_UNSUPPORTED'],
     ] as const)('should warn for unsupported array form %s', (typeText, warningCode) => {
       const result = normalizeSingleProperty(typeText);
@@ -183,7 +183,7 @@ export type Payload = {
       const declaration = loadDeclaration(`
 export type Payload = {
   response: Promise<string>;
-  model: CustomerStore;
+  model: Book;
 };`);
       const result = normalizeTypeScriptDeclaration(declaration);
       expect(result.success).toBe(false);
@@ -230,15 +230,15 @@ export type Payload = {
   describe('fixture scenarios', () => {
     it('should normalize the valid-contract fixture declaration', () => {
       const content = fs.readFileSync(
-        path.join(FIXTURES_DIR, 'valid-contract/frontend/src/types/customer-store.ts'),
+        path.join(FIXTURES_DIR, 'valid-contract/frontend/src/types/book.ts'),
         'utf-8',
       );
-      const declaration = loadDeclaration(content, 'UpdateCustomerStorePayload');
+      const declaration = loadDeclaration(content, 'UpdateBookPayload');
       const result = normalizeTypeScriptDeclaration(declaration);
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.contract.properties.get('storeNumber')).toEqual({
-          name: 'storeNumber',
+        expect(result.contract.properties.get('isbn')).toEqual({
+          name: 'isbn',
           type: 'string',
           isArray: false,
           required: true,
@@ -255,27 +255,27 @@ export type Payload = {
 
     it('should normalize the incompatible-type fixture declaration', () => {
       const content = fs.readFileSync(
-        path.join(FIXTURES_DIR, 'incompatible-type/frontend/src/types/customer-store.ts'),
+        path.join(FIXTURES_DIR, 'incompatible-type/frontend/src/types/book.ts'),
         'utf-8',
       );
-      const declaration = loadDeclaration(content, 'UpdateCustomerStorePayload');
+      const declaration = loadDeclaration(content, 'UpdateBookPayload');
       const result = normalizeTypeScriptDeclaration(declaration);
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.contract.properties.get('compositeRank')?.type).toBe('string');
+        expect(result.contract.properties.get('pageCount')?.type).toBe('string');
       }
     });
 
     it('should normalize the required-mismatch fixture declaration', () => {
       const content = fs.readFileSync(
-        path.join(FIXTURES_DIR, 'required-mismatch/frontend/src/types/customer-store.ts'),
+        path.join(FIXTURES_DIR, 'required-mismatch/frontend/src/types/book.ts'),
         'utf-8',
       );
-      const declaration = loadDeclaration(content, 'UpdateCustomerStorePayload');
+      const declaration = loadDeclaration(content, 'UpdateBookPayload');
       const result = normalizeTypeScriptDeclaration(declaration);
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.contract.properties.get('storeGroup')?.required).toBe(false);
+        expect(result.contract.properties.get('category')?.required).toBe(false);
       }
     });
   });

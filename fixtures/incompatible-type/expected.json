@@ -1,10 +1,10 @@
 {
-  "description": "OpenAPI defines compositeRank as integer but TypeScript defines it as string.",
+  "description": "OpenAPI defines pageCount as integer but TypeScript defines it as string.",
   "expectedFindings": [
     {
       "ruleId": "contract.incompatible-type",
       "severity": "critical",
-      "details": "Property compositeRank: OpenAPI expects number, TypeScript has string."
+      "details": "Property pageCount: OpenAPI expects number, TypeScript has string."
     }
   ],
   "expectedWarnings": []

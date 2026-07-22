@@ -407,11 +407,11 @@ describe('normalizeOpenApiSchema', () => {
   describe('fixture scenarios', () => {
     it('should normalize the valid-contract fixture schema', () => {
       const doc = loadFixtureDocument('valid-contract');
-      const result = normalizeOpenApiSchema(doc, 'UpdateCustomerStoreRequest');
+      const result = normalizeOpenApiSchema(doc, 'UpdateBookRequest');
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.contract.properties.get('storeNumber')).toEqual({
-          name: 'storeNumber',
+        expect(result.contract.properties.get('isbn')).toEqual({
+          name: 'isbn',
           type: 'string',
           isArray: false,
           required: true,
@@ -434,17 +434,17 @@ describe('normalizeOpenApiSchema', () => {
 
     it('should normalize the incompatible-type fixture schema', () => {
       const doc = loadFixtureDocument('incompatible-type');
-      const result = normalizeOpenApiSchema(doc, 'UpdateCustomerStoreRequest');
+      const result = normalizeOpenApiSchema(doc, 'UpdateBookRequest');
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.contract.properties.get('compositeRank')).toEqual({
-          name: 'compositeRank',
+        expect(result.contract.properties.get('pageCount')).toEqual({
+          name: 'pageCount',
           type: 'number',
           isArray: false,
           required: true,
         });
-        expect(result.contract.properties.get('storeNumber')).toEqual({
-          name: 'storeNumber',
+        expect(result.contract.properties.get('isbn')).toEqual({
+          name: 'isbn',
           type: 'string',
           isArray: false,
           required: false,
@@ -454,11 +454,11 @@ describe('normalizeOpenApiSchema', () => {
 
     it('should normalize the required-mismatch fixture schema', () => {
       const doc = loadFixtureDocument('required-mismatch');
-      const result = normalizeOpenApiSchema(doc, 'UpdateCustomerStoreRequest');
+      const result = normalizeOpenApiSchema(doc, 'UpdateBookRequest');
       expect(result.success).toBe(true);
       if (result.success) {
-        expect(result.contract.properties.get('storeGroup')?.required).toBe(true);
-        expect(result.contract.properties.get('storeNumber')?.required).toBe(true);
+        expect(result.contract.properties.get('category')?.required).toBe(true);
+        expect(result.contract.properties.get('isbn')?.required).toBe(true);
       }
     });
   });

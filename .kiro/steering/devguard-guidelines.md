@@ -208,3 +208,7 @@ Do not add during this submission:
 - guides, tutorials, or API reference documentation.
 
 A full documentation site under a dedicated domain is a post-hackathon roadmap item. Do not reserve, purchase, or hardcode a domain or npm package name until the final packaging task.
+
+## Confidentiality for Public Assets
+
+All public examples, fixtures, screenshots, terminal recordings, and demo assets must use fictional data only. Do not include employer, client, proprietary, private-repository, credential, or internal-business information in public project materials.

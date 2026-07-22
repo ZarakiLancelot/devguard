@@ -1,10 +1,10 @@
 {
-  "description": "OpenAPI requires modelTierId but TypeScript declaration does not contain it.",
+  "description": "OpenAPI requires authorId but TypeScript declaration does not contain it.",
   "expectedFindings": [
     {
       "ruleId": "contract.missing-property",
       "severity": "high",
-      "details": "Property modelTierId is required in OpenAPI but missing from TypeScript."
+      "details": "Property authorId is required in OpenAPI but missing from TypeScript."
     }
   ],
   "expectedWarnings": []

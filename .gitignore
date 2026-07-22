@@ -17,4 +17,7 @@ coverage/
 # Logs
 *.log
 
+# AI assistant session exports
+kiro-session-*.json
+*.session.json
 kiro-session-before-rename.json

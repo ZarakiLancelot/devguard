@@ -13,10 +13,10 @@ const OUTPUT_DIR = '/home/user/project/.devguard';
 describe('path-security', () => {
   describe('resolveRepositoryPath', () => {
     it('should resolve a relative repository path from workspace', () => {
-      const result = resolveRepositoryPath(WORKSPACE, '../customer-store-api');
+      const result = resolveRepositoryPath(WORKSPACE, '../book-api');
       expect(result.valid).toBe(true);
       if (result.valid) {
-        expect(result.resolvedPath).toBe(path.resolve(WORKSPACE, '../customer-store-api'));
+        expect(result.resolvedPath).toBe(path.resolve(WORKSPACE, '../book-api'));
       }
     });
 

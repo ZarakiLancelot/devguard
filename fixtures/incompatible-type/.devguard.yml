@@ -15,9 +15,9 @@ openapi:
   path: docs/openapi.yaml
 
 contracts:
-  - name: UpdateCustomerStore
-    openapiSchema: UpdateCustomerStoreRequest
+  - name: UpdateBook
+    openapiSchema: UpdateBookRequest
     typescript:
       repository: frontend
-      file: src/types/customer-store.ts
-      type: UpdateCustomerStorePayload
+      file: src/types/book.ts
+      type: UpdateBookPayload

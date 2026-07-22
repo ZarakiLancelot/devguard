@@ -6,12 +6,12 @@ const COMPLETE_VALID_CONFIG = {
   version: 1,
   repositories: {
     backend: {
-      path: '../customer-store-api',
+      path: '../book-api',
       baseRef: 'main',
       role: 'backend',
     },
     frontend: {
-      path: '../customer-store-web',
+      path: '../book-web',
       baseRef: 'develop',
       role: 'frontend',
     },
@@ -22,12 +22,12 @@ const COMPLETE_VALID_CONFIG = {
   },
   contracts: [
     {
-      name: 'UpdateCustomerStore',
-      openapiSchema: 'UpdateCustomerStoreRequest',
+      name: 'UpdateBook',
+      openapiSchema: 'UpdateBookRequest',
       typescript: {
         repository: 'frontend',
-        file: 'src/api/customer-store.types.ts',
-        type: 'UpdateCustomerStorePayload',
+        file: 'src/api/book.types.ts',
+        type: 'UpdateBookPayload',
       },
     },
   ],

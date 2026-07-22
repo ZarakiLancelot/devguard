@@ -649,8 +649,8 @@ Findings must be ordered by:
 A contract mismatch should render as:
 
 ```diff
-- OpenAPI UpdateCustomerStoreRequest: modelTierId: number (required)
-+ TypeScript UpdateCustomerStorePayload: modelTierId is missing
+- OpenAPI UpdateBookRequest: authorId: number (required)
++ TypeScript UpdateBookPayload: authorId is missing
 ```
 
 ### 12.3 Long code sections

@@ -4,14 +4,14 @@
     {
       "ruleId": "risk.missing-related-tests",
       "severity": "warning",
-      "details": "frontend/src/services/customer-store.ts has no matching test file."
+      "details": "frontend/src/services/book.ts has no matching test file."
     }
   ],
   "expectedWarnings": [],
   "simulatedChangedFiles": [
     {
       "repositoryId": "frontend",
-      "path": "src/services/customer-store.ts",
+      "path": "src/services/book.ts",
       "status": "modified"
     }
   ]

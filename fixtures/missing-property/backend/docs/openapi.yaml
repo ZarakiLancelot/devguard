@@ -1,19 +1,19 @@
 openapi: 3.0.3
 info:
-  title: Customer Store API
+  title: Digital Library API
   version: 1.0.0
 paths: {}
 components:
   schemas:
-    UpdateCustomerStoreRequest:
+    UpdateBookRequest:
       type: object
       required:
-        - storeNumber
-        - modelTierId
+        - isbn
+        - authorId
       properties:
-        storeNumber:
+        isbn:
           type: string
-        modelTierId:
+        authorId:
           type: integer
         active:
           type: boolean

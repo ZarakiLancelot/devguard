@@ -6,8 +6,8 @@ describe('generateFindingId', () => {
   const baseInput: FindingIdInput = {
     ruleId: 'contract.missing-property',
     repositoryId: 'frontend',
-    file: 'src/types/customer-store.ts',
-    subject: 'modelTierId',
+    file: 'src/types/book.ts',
+    subject: 'authorId',
   };
 
   it('should produce identical IDs for identical inputs', () => {
@@ -41,7 +41,7 @@ describe('generateFindingId', () => {
 
   it('should change when subject (property) changes', () => {
     const id1 = generateFindingId(baseInput);
-    const id2 = generateFindingId({ ...baseInput, subject: 'compositeRank' });
+    const id2 = generateFindingId({ ...baseInput, subject: 'pageCount' });
     expect(id1).not.toBe(id2);
   });
 
@@ -63,7 +63,7 @@ describe('generateFindingId', () => {
   });
 
   it('should produce different IDs when file is present vs absent', () => {
-    const withFile = generateFindingId({ ...baseInput, file: 'src/types/store.ts' });
+    const withFile = generateFindingId({ ...baseInput, file: 'src/types/book.ts' });
     const withoutFile = generateFindingId({
       ruleId: baseInput.ruleId,
       repositoryId: baseInput.repositoryId,
@@ -94,17 +94,17 @@ describe('generateFindingId', () => {
     const id = generateFindingId(baseInput);
     expect(id).not.toContain('contract');
     expect(id).not.toContain('frontend');
-    expect(id).not.toContain('customer-store');
-    expect(id).not.toContain('modelTierId');
+    expect(id).not.toContain('book');
+    expect(id).not.toContain('authorId');
   });
 });
 
 describe('generateRootCauseId', () => {
   const baseInput: RootCauseIdInput = {
     repositoryId: 'frontend',
-    file: 'src/types/customer-store.ts',
-    mappingName: 'UpdateCustomerStore',
-    subject: 'modelTierId',
+    file: 'src/types/book.ts',
+    mappingName: 'UpdateBook',
+    subject: 'authorId',
   };
 
   it('should match root-<16 hex chars> format', () => {
@@ -126,15 +126,15 @@ describe('generateRootCauseId', () => {
     const findingA = generateFindingId({
       ruleId: 'contract.missing-property',
       repositoryId: 'frontend',
-      file: 'src/types/customer-store.ts',
-      subject: 'modelTierId',
+      file: 'src/types/book.ts',
+      subject: 'authorId',
     });
 
     const findingB = generateFindingId({
       ruleId: 'contract.required-mismatch',
       repositoryId: 'frontend',
-      file: 'src/types/customer-store.ts',
-      subject: 'modelTierId',
+      file: 'src/types/book.ts',
+      subject: 'authorId',
     });
 
     // Findings differ because ruleId differs
@@ -163,7 +163,7 @@ describe('generateRootCauseId', () => {
 
   it('should change when subject changes', () => {
     const id1 = generateRootCauseId(baseInput);
-    const id2 = generateRootCauseId({ ...baseInput, subject: 'compositeRank' });
+    const id2 = generateRootCauseId({ ...baseInput, subject: 'pageCount' });
     expect(id1).not.toBe(id2);
   });
 
@@ -176,11 +176,11 @@ describe('generateRootCauseId', () => {
   it('should normalize Windows and Unix paths identically', () => {
     const unix = generateRootCauseId({
       ...baseInput,
-      file: 'src/types/customer-store.ts',
+      file: 'src/types/book.ts',
     });
     const windows = generateRootCauseId({
       ...baseInput,
-      file: 'src\\types\\customer-store.ts',
+      file: 'src\\types\\book.ts',
     });
     expect(unix).toBe(windows);
   });
@@ -188,9 +188,9 @@ describe('generateRootCauseId', () => {
   it('should not contain raw input values in the generated ID', () => {
     const id = generateRootCauseId(baseInput);
     expect(id).not.toContain('frontend');
-    expect(id).not.toContain('customer-store');
-    expect(id).not.toContain('UpdateCustomerStore');
-    expect(id).not.toContain('modelTierId');
+    expect(id).not.toContain('book');
+    expect(id).not.toContain('UpdateBook');
+    expect(id).not.toContain('authorId');
   });
 });
 

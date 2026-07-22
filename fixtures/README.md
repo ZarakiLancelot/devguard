@@ -22,7 +22,7 @@ OpenAPI and TypeScript declarations match perfectly.
 
 ### missing-property
 
-OpenAPI requires `modelTierId` (integer) but the TypeScript declaration
+OpenAPI requires `authorId` (integer) but the TypeScript declaration
 does not include it.
 
 - **Expected findings:** `contract.missing-property` (high)
@@ -30,7 +30,7 @@ does not include it.
 
 ### incompatible-type
 
-OpenAPI defines `compositeRank` as `integer` but TypeScript defines it
+OpenAPI defines `pageCount` as `integer` but TypeScript defines it
 as `string`.
 
 - **Expected findings:** `contract.incompatible-type` (critical)
@@ -38,7 +38,7 @@ as `string`.
 
 ### required-mismatch
 
-OpenAPI marks `storeGroup` as required but TypeScript marks it optional
+OpenAPI marks `category` as required but TypeScript marks it optional
 with `?`.
 
 - **Expected findings:** `contract.required-mismatch` (high)
@@ -46,7 +46,7 @@ with `?`.
 
 ### missing-tests
 
-A production TypeScript file (`customer-store.ts`) is represented as
+A production TypeScript file (`book.ts`) is represented as
 changed with no matching `.test.ts` or `.spec.ts` counterpart.
 
 - **Expected findings:** `risk.missing-related-tests` (warning)
@@ -82,11 +82,11 @@ fixture-name/
 ├── frontend/
 │   └── src/
 │       └── types/         # or services/
-│           └── customer-store.ts
+│           └── book.ts
 └── expected.json          # Expected findings and warnings
 ```
 
 ## Domain
 
-All fixtures use the **CustomerStore** domain to maintain consistency
+All fixtures use the **Book** domain to maintain consistency
 and readability across scenarios.

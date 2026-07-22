@@ -136,12 +136,12 @@ version: 1
 
 repositories:
   backend:
-    path: ../customer-store-api
+    path: ../book-api
     baseRef: main
     role: backend
 
   frontend:
-    path: ../customer-store-web
+    path: ../book-web
     baseRef: develop
     role: frontend
 
@@ -150,12 +150,12 @@ openapi:
   path: docs/openapi.yaml
 
 contracts:
-  - name: UpdateCustomerStore
-    openapiSchema: UpdateCustomerStoreRequest
+  - name: UpdateBook
+    openapiSchema: UpdateBookRequest
     typescript:
       repository: frontend
-      file: src/api/customer-store.types.ts
-      type: UpdateCustomerStorePayload
+      file: src/api/book.types.ts
+      type: UpdateBookPayload
 
 risk:
   sensitivePatterns:
@@ -300,25 +300,25 @@ Supported TypeScript values:
 Supported declaration examples:
 
 ```typescript
-export interface CustomerStore {
+export interface Book {
   id: number;
-  storeNumber: string;
+  isbn: string;
   active?: boolean;
   tags: string[];
 }
 ```
 
 ```typescript
-export type UpdateCustomerStorePayload = {
-  modelTierId: number;
-  compositeRank?: number;
+export type UpdateBookPayload = {
+  authorId: number;
+  pageCount?: number;
 };
 ```
 
 Initially unsupported examples include:
 
 ```typescript
-type CustomerStore = Pick<ApiResponse<Normalized<Customer>>, CustomerFields>;
+type Book = Pick<ApiResponse<Normalized<Book>>, BookFields>;
 ```
 
 Unsupported constructs must generate warnings, not crashes.
@@ -354,7 +354,7 @@ The generator must produce at least one scenario for every critical or high cont
 For a required property mismatch, a scenario may be:
 
 ```text
-Reject or prevent submission when modelTierId is missing.
+Reject or prevent submission when authorId is missing.
 ```
 
 The MVP must support structured test scenarios. Executable Vitest scaffolds are optional but desirable.
