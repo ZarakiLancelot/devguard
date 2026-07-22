@@ -5,6 +5,7 @@ import path from 'node:path';
  */
 export type PathSecurityCode =
   | 'PATH_OUTSIDE_REPOSITORY'
+  | 'PATH_OUTSIDE_ALLOWED_ROOT'
   | 'OUTPUT_PATH_OUTSIDE_DIRECTORY'
   | 'ABSOLUTE_PATH_NOT_ALLOWED'
   | 'INVALID_PATH';
@@ -36,7 +37,7 @@ export type PathResolutionResult =
  *
  * Example: `/project/api` does NOT contain `/project/api-copy/file.ts`.
  */
-function isContainedIn(childPath: string, rootPath: string): boolean {
+export function isPathContainedInRoot(childPath: string, rootPath: string): boolean {
   const normalizedRoot = path.normalize(rootPath) + path.sep;
   const normalizedChild = path.normalize(childPath) + path.sep;
   return normalizedChild.startsWith(normalizedRoot);
@@ -118,12 +119,50 @@ export function resolveFileInRepository(
 
   const resolved = path.resolve(repositoryRoot, filePath);
 
-  if (!isContainedIn(resolved, repositoryRoot)) {
+  if (!isPathContainedInRoot(resolved, repositoryRoot)) {
     return {
       valid: false,
       error: {
         code: 'PATH_OUTSIDE_REPOSITORY',
         message: `File path "${filePath}" resolves outside repository root "${repositoryRoot}"`,
+      },
+    };
+  }
+
+  return { valid: true, resolvedPath: resolved };
+}
+
+/**
+ * Resolves a relative or absolute file path against a base directory and
+ * verifies that its lexical resolved location remains inside an allowed root.
+ * It does not inspect filesystem entries or resolve symlinks.
+ */
+export function resolveFileWithinRoot(
+  baseDirectory: string,
+  allowedRoot: string,
+  filePath: string,
+): PathResolutionResult {
+  if (
+    baseDirectory.trim() === '' ||
+    allowedRoot.trim() === '' ||
+    filePath.trim() === '' ||
+    filePath.includes('\u0000')
+  ) {
+    return {
+      valid: false,
+      error: { code: 'INVALID_PATH', message: 'File path must be a non-empty valid path' },
+    };
+  }
+
+  const normalizedRoot = path.resolve(allowedRoot);
+  const resolved = path.resolve(baseDirectory, filePath);
+
+  if (!isPathContainedInRoot(resolved, normalizedRoot)) {
+    return {
+      valid: false,
+      error: {
+        code: 'PATH_OUTSIDE_ALLOWED_ROOT',
+        message: 'File path resolves outside the allowed root',
       },
     };
   }
@@ -158,7 +197,7 @@ export function resolveOutputFile(outputDirectory: string, filename: string): Pa
 
   const resolved = path.resolve(outputDirectory, filename);
 
-  if (!isContainedIn(resolved, outputDirectory)) {
+  if (!isPathContainedInRoot(resolved, outputDirectory)) {
     return {
       valid: false,
       error: {

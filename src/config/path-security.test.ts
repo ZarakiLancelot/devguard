@@ -1,8 +1,10 @@
 import path from 'node:path';
 import { describe, it, expect } from 'vitest';
 import {
+  isPathContainedInRoot,
   resolveRepositoryPath,
   resolveFileInRepository,
+  resolveFileWithinRoot,
   resolveOutputFile,
 } from './path-security.js';
 
@@ -220,5 +222,56 @@ describe('path-security', () => {
         expect(result.resolvedPath).toBe(path.join(REPO_ROOT, 'symlink-to-outside/secret.txt'));
       }
     });
+  });
+});
+
+describe('resolveFileWithinRoot', () => {
+  it('should resolve a relative path against its base directory inside the allowed root', () => {
+    const result = resolveFileWithinRoot(REPO_ROOT, WORKSPACE, 'docs/requirements.md');
+
+    expect(result).toEqual({
+      valid: true,
+      resolvedPath: path.join(REPO_ROOT, 'docs/requirements.md'),
+    });
+  });
+
+  it('should accept an absolute path already inside the allowed root', () => {
+    const absoluteFile = path.join(REPO_ROOT, 'requirements.md');
+    const result = resolveFileWithinRoot(WORKSPACE, WORKSPACE, absoluteFile);
+
+    expect(result).toEqual({ valid: true, resolvedPath: absoluteFile });
+  });
+
+  it('should reject traversal and sibling-prefix paths outside the allowed root', () => {
+    const traversal = resolveFileWithinRoot(REPO_ROOT, REPO_ROOT, '../secret.md');
+    const sibling = resolveFileWithinRoot(REPO_ROOT, REPO_ROOT, '../api-copy/requirements.md');
+
+    expect(traversal).toMatchObject({
+      valid: false,
+      error: { code: 'PATH_OUTSIDE_ALLOWED_ROOT' },
+    });
+    expect(sibling).toMatchObject({
+      valid: false,
+      error: { code: 'PATH_OUTSIDE_ALLOWED_ROOT' },
+    });
+  });
+
+  it('should reject empty and null-byte paths', () => {
+    expect(resolveFileWithinRoot(REPO_ROOT, REPO_ROOT, '')).toMatchObject({
+      valid: false,
+      error: { code: 'INVALID_PATH' },
+    });
+    expect(resolveFileWithinRoot(REPO_ROOT, REPO_ROOT, 'bad\u0000path')).toMatchObject({
+      valid: false,
+      error: { code: 'INVALID_PATH' },
+    });
+  });
+});
+
+describe('isPathContainedInRoot', () => {
+  it('should use a separator-aware boundary for equal, nested, and sibling paths', () => {
+    expect(isPathContainedInRoot(REPO_ROOT, REPO_ROOT)).toBe(true);
+    expect(isPathContainedInRoot(path.join(REPO_ROOT, 'docs/file.md'), REPO_ROOT)).toBe(true);
+    expect(isPathContainedInRoot('/home/user/project/api-copy/file.md', REPO_ROOT)).toBe(false);
   });
 });
