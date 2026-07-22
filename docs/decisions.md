@@ -326,3 +326,16 @@ Only the highest-severity deduction applies per root cause.
 **Rationale:** These failures prevent or limit contract verification and must be visible in the same report model without creating a parallel public warning system.
 
 **Consequences:** Parser and normalization results remain typed internal results. The Contract Checker orchestration converts the approved user-visible failures into `AnalysisFinding` values with stable IDs, evidence, metadata, and locations.
+
+
+---
+
+## ADR-030: Duplicate ChangedFile Status Tie-Break
+
+**Status:** ACCEPTED
+
+**Decision:** When the same production file appears more than once in `changedFiles` with different statuses, the `missing-related-tests` rule selects one canonical entry using lexical status order (`added` < `modified` < `renamed`).
+
+**Rationale:** Duplicate entries for the same file are an anomalous input that should not occur in a well-formed diff. A simple deterministic tie-break avoids undefined behavior without requiring semantic status prioritization.
+
+**Consequences:** This tie-break is arbitrary but stable and testable. It does not affect normal, well-formed changed-file inputs.
