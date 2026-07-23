@@ -460,3 +460,24 @@ Lower-level builder and Git errors pass through unchanged, and operational/confi
 **Rationale:** One validated canonical configuration snapshot prevents configuration drift between repository assembly and future analyzers while keeping the Task 10.5 builder and later CLI responsibilities separate. A minimal source input avoids prematurely coupling configuration selection, output policy, or Commander.js behavior to repository-context construction.
 
 **Consequences:** Future local orchestration must reuse the session's `LoadedConfig.config` reference and `workspaceBase`, and use its canonical `configPath` when generating analysis identities. It must not reload configuration during the same run. The future full `RepositorySource` adaptation, CLI-relative requirements policy, analysis pipeline, and GitHub adapter require separate approved work.
+
+
+---
+
+## ADR-038: Application Analysis Orchestration and Fatal Error Boundary
+
+**Status:** ACCEPTED
+
+**Decision:** `analyzeRepository` owns one complete local analysis run. It creates exactly one `LocalAnalysisSession`, loads one `RepositoryContext` from that session, and reuses the same immutable-by-convention `LoadedConfig.config` reference for all configuration-dependent analysis decisions. It returns only the session `LoadedConfig` for later internal Milestone 11 composition and the public `PRHealthReport` for later formatting; `LoadedConfig`, canonical configuration paths, workspace bases, source contents, requirements, patches, and repository paths never enter reports, findings, generated tests, warnings, logs, or console output.
+
+Repository-file identity is the exact pair `(repositoryId, path)`, represented with nested maps. Duplicate exact identities and required lookup misses are fatal application invariants. Contract mappings run exactly once in code-point mapping-name order. Changed files are copied, flattened across repositories, and code-point sorted before the two existing risk rules run. Findings originate only from returned Contract Checker findings and the two approved risk rules; they retain semantic aggregation order and are finally sorted by `buildReport`.
+
+Returned typed OpenAPI and TypeScript parser/normalizer outcomes remain recoverable Contract Checker warnings or approved findings. Contract warning messages are never exposed. The application sorts structured contract warnings deterministically, then emits generic warning text with JSON-encoded mapping, source, optional repository-relative file, optional valid line, and code fields. `buildReport` remains responsible for combining context warnings, exact warning deduplication, and final warning sorting.
+
+Unexpected analyzer, risk-rule, scenario-generator, score-calculator, and analysis-ID exceptions are fatal `ANALYZER_EXECUTION_FAILED` errors. Repository-file and clock invariants are fatal `ANALYSIS_INVARIANT_VIOLATION` errors. Report-builder or report-schema failures are fatal `REPORT_BUILD_FAILED` errors. Each has a stable generic public message and retains its cause without copying arbitrary diagnostic text. Existing typed configuration, Git, file-loading, session, source, and local-context operational errors pass through unchanged. Fatal operational failures never become warnings, findings, scores, partial reports, or partial analysis results.
+
+`generateAnalysisId` receives only the session’s canonical `LoadedConfig.configPath` and repository ID/base-ref/head-ref tuples. The clock is injected, read exactly once after successful analyzer/score/ID work, and converted once to the report timestamp. Default dependencies are immutable factory defaults; tests override them through `createAnalyzeRepository` without module-global application mocks.
+
+**Rationale:** This operationalizes ADR-037’s one-load session ownership and resolves the historical double-load pseudocode path in `design.md` without rewriting that historical design document. It provides a deterministic, private, testable application boundary while leaving source assembly, analyzers, report formatting, output writing, CLI wiring, console summaries, thresholds, exit codes, and GitHub support in their assigned later scopes.
+
+**Consequences:** Task 11.2–11.4 may reuse the returned `LoadedConfig` internally without reloading configuration, but may not expose it. Output selection/writing, Markdown/JSON formatting selection, Commander behavior, verbosity, fail-below policy, console summaries, exit codes, and all GitHub/Octokit behavior remain out of scope for this decision.
