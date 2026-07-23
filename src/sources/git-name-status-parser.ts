@@ -1,4 +1,5 @@
 import type { ChangeStatus, ChangedFile } from '../types/repository.js';
+import { validateGitRepositoryPath } from './git-repository-path.js';
 
 const RENAME_OR_COPY_STATUS_PATTERN = /^([RC])(\d{1,3})$/u;
 
@@ -118,24 +119,15 @@ function parseStatusToken(statusToken: string): ParsedStatus {
 }
 
 function validateGitPath(path: string | undefined): string {
-  if (
-    path === undefined ||
-    path.length === 0 ||
-    path.includes('\u0000') ||
-    path.startsWith('/') ||
-    path.startsWith('\\\\') ||
-    /^[A-Za-z]:[\\/]/u.test(path) ||
-    (process.platform === 'win32' && path.includes('\\'))
-  ) {
+  if (path === undefined) {
     throw new GitNameStatusParseError();
   }
 
-  const segments = path.split('/');
-  if (segments.some((segment) => segment.length === 0 || segment === '.' || segment === '..')) {
+  try {
+    return validateGitRepositoryPath(path);
+  } catch {
     throw new GitNameStatusParseError();
   }
-
-  return path;
 }
 
 function compareChangedFiles(left: ChangedFile, right: ChangedFile): number {

@@ -382,3 +382,22 @@ Configured `baseRef` text is preserved for report-facing traceability while its 
 **Rationale:** Captured SHAs prevent moving refs from changing the comparison. Strict NUL parsing preserves valid unusual filenames and eliminates quote-configuration dependence. Explicit merge-base and rename policies make otherwise ambiguous Git behavior deterministic. Sorting prevents Git configuration such as `diff.orderFile` from affecting public-domain order.
 
 **Consequences:** The 500-record limit applies per repository. Overflow is fatal and never truncated. The existing Git runner buffers complete stdout, so this count prevents downstream processing but is not a stream-time memory bound; a future bounded-runner contract is required for that protection. Patch retrieval, line counts, binary handling, and complete file loading remain Task 10.4 responsibilities.
+
+
+---
+
+## ADR-034: Immutable Git Patch and Repository File Loading
+
+**Status:** ACCEPTED
+
+**Decision:** Task 10.4 loads every patch from Task 10.2's captured immutable `baseCommit...headRef` comparison and loads required complete mapped files only from the captured `headRef` Git tree. It never reads the working tree. Task 10.5, not Task 10.4, selects and groups mapped paths from configuration.
+
+Patches are loaded per changed-file record with at most four simultaneous Git commands. Each command uses literal pathspec handling, disables external diff, text conversion, and color, pins the 50% rename threshold and `a/`/`b/` prefixes, and preserves successful unified-patch output exactly. Renames use old and new paths. Added/deleted line counts remain deferred. Patch output over 256 KiB, containing NUL, unavailable, or timed out is omitted without truncation and recorded as a deterministic warning; changed-file metadata remains available.
+
+Task 10.4 validates Git paths through one shared repository-relative POSIX validator. It preserves accepted text exactly, rejects traversal/absolute forms, and preserves literal backslashes only on POSIX. Exact duplicate mapped paths are loaded once; returned repository files are code-point sorted by repository ID and path.
+
+Required mapped files are loaded atomically through `git cat-file`: verify object type, read byte size, then read `blob` content from `<headRef>:<path>`. Only blobs are accepted. Each blob is limited to 1 MiB and one `loadRepositoryFiles` invocation is limited to 20 MiB over deduplicated complete files. Missing, malformed, non-blob, oversized, binary, or inconsistent blobs are fatal typed errors; no partial file array is returned. Repository-file `absolutePath` remains unset.
+
+**Rationale:** Captured SHAs prevent dirty working trees, branch movement, and later commits from changing patch or content inputs. Literal pathspecs preserve valid unusual Git paths. Object type/size checks avoid filesystem reads and prevent loading an oversized blob. Patch omissions are recoverable because changed-file metadata remains useful, while missing required mapped source prevents contract analysis.
+
+**Consequences:** Task 10.1 intentionally remains unchanged and buffers UTF-8 stdout. Patch-size checks are post-capture rather than stream-time bounds. The runner cannot strictly identify invalid UTF-8 byte sequences after decoding; Task 10.4 can classify NUL content and byte-length mismatch only. Task 10.5 must later enforce the authoritative cross-repository text budget, including retained patches and requirements text, and must aggregate loader warnings into `RepositoryContext`.
