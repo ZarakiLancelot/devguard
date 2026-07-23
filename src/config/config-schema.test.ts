@@ -353,3 +353,80 @@ describe('config-schema', () => {
     });
   });
 });
+
+describe('strict unknown-key validation', () => {
+  it('should reject an unknown root configuration key', () => {
+    const result = devGuardConfigSchema.safeParse({ ...MINIMAL_VALID_CONFIG, unexpected: true });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('should reject an unknown repository-entry key', () => {
+    const result = devGuardConfigSchema.safeParse({
+      ...MINIMAL_VALID_CONFIG,
+      repositories: {
+        app: { path: '.', baseRef: 'main', role: 'fullstack', unexpected: true },
+      },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('should reject an unknown OpenAPI key', () => {
+    const result = devGuardConfigSchema.safeParse({
+      ...MINIMAL_VALID_CONFIG,
+      openapi: { repository: 'app', path: 'openapi.yaml', unexpected: true },
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('should reject an unknown contract key', () => {
+    const result = devGuardConfigSchema.safeParse({
+      ...MINIMAL_VALID_CONFIG,
+      contracts: [
+        {
+          name: 'Contract',
+          openapiSchema: 'Schema',
+          typescript: { repository: 'app', file: 'types.ts', type: 'Payload' },
+          unexpected: true,
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it('should reject an unknown TypeScript-target key', () => {
+    const result = devGuardConfigSchema.safeParse({
+      ...MINIMAL_VALID_CONFIG,
+      contracts: [
+        {
+          name: 'Contract',
+          openapiSchema: 'Schema',
+          typescript: {
+            repository: 'app',
+            file: 'types.ts',
+            type: 'Payload',
+            unexpected: true,
+          },
+        },
+      ],
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it.each([
+    ['risk', { unexpected: true }],
+    ['testing', { unexpected: true }],
+    ['output', { unexpected: true }],
+  ])('should reject an unknown %s configuration key', (section, value) => {
+    const result = devGuardConfigSchema.safeParse({
+      ...MINIMAL_VALID_CONFIG,
+      [section]: value,
+    });
+
+    expect(result.success).toBe(false);
+  });
+});

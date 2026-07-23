@@ -424,3 +424,20 @@ Context construction is all-or-nothing for fatal validation, Git metadata, requi
 **Rationale:** A small deterministic builder composes the committed immutable Git boundaries without duplicating Git behavior or prematurely implementing the production source adapter. Explicit ownership for mapped paths, warnings, requirements, and the cross-repository budget keeps the future Milestone 11 orchestration thin while preserving safe, reproducible local contexts.
 
 **Consequences:** The builder can assemble one or two supported repositories for later analyzers, but it does not run analyzers or reports and does not read configuration files. Future Milestone 11 code must supply the validated configuration and `workspaceBase`, may define process-relative CLI requirements behavior before calling this builder, and must not change the builder's immutable Git or aggregate-retained-text guarantees.
+
+
+---
+
+## ADR-036: Production DevGuard Configuration Loading
+
+**Status:** ACCEPTED
+
+**Decision:** DevGuard configuration remains an explicitly selected required input. Relative configuration paths resolve from a caller-provided working directory; explicitly selected absolute paths and paths outside that directory are allowed. Configuration-file symlinks are allowed, but the loader returns the canonical real target path and uses the canonical target directory as `workspaceBase`.
+
+The loader accepts only regular configuration files up to exactly 1 MiB, reads raw bytes, requires strict UTF-8, and rejects NUL content. It accepts exactly one YAML document. Anchors, aliases, merge keys, duplicate keys, custom tags, binary and timestamp-tagged values, unsupported node forms, and values outside a finite plain JSON-like tree are rejected. Parsed configuration-object schemas reject unknown keys.
+
+Structural Zod validation runs before relational `validateConfig` validation. Structural errors may expose only deterministic schema/index locations; public typed error codes and messages never expose absolute paths, raw filesystem or parser diagnostics, configuration content, or received values. Configuration loading is read-only and atomic: it returns either a complete structurally and relationally validated configuration or no result.
+
+**Rationale:** The Milestone 11 local source must receive one deterministic, validated configuration and canonical workspace base without permissive YAML behavior, path ambiguity, or unsafe diagnostics. Strict configuration keys detect misspelled controls before local Git analysis begins.
+
+**Consequences:** `loadConfig` is the production configuration boundary. `LocalRepositorySource`, `analyzeRepository`, CLI path interpretation, output handling, and all analyzer/report orchestration remain later Milestone 11 work. No source adapter, CLI behavior, Git behavior, or analysis semantics are changed by this decision.
