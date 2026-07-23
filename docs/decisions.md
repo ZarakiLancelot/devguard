@@ -441,3 +441,22 @@ Structural Zod validation runs before relational `validateConfig` validation. St
 **Rationale:** The Milestone 11 local source must receive one deterministic, validated configuration and canonical workspace base without permissive YAML behavior, path ambiguity, or unsafe diagnostics. Strict configuration keys detect misspelled controls before local Git analysis begins.
 
 **Consequences:** `loadConfig` is the production configuration boundary. `LocalRepositorySource`, `analyzeRepository`, CLI path interpretation, output handling, and all analyzer/report orchestration remain later Milestone 11 work. No source adapter, CLI behavior, Git behavior, or analysis semantics are changed by this decision.
+
+
+---
+
+## ADR-037: Single-Load Local Analysis Session Ownership
+
+**Status:** ACCEPTED
+
+**Decision:** One local analysis run loads configuration exactly once. `createLocalAnalysisSession` is the sole configuration-loading boundary for that run and owns the resulting `LoadedConfig` snapshot. It returns that same snapshot with one per-session `LocalRepositorySource`, whose constructor receives the exact `LoadedConfig` object.
+
+`LocalRepositorySource.loadContext` accepts only an optional raw `requirementsPath`. It forwards that value unchanged, when present, together with the snapshot's exact `config` reference and `workspaceBase` to `buildLocalRepositoryContext`. Configuration paths and output settings are not source-load inputs. The source does not implement the preliminary generic `RepositorySource`; `AnalysisInput` and `RepositorySource` remain deferred until broader orchestration settles their final ownership.
+
+The source is created per session and has no already-used guard. The snapshot is immutable by convention: neither the session factory nor the source clones, freezes, re-reads, re-parses, revalidates, or reconstructs it. Its canonical `configPath` is retained for future deterministic analysis-ID generation. Requirements CLI-relative interpretation remains deferred; this boundary forwards the raw selected string unchanged.
+
+Lower-level builder and Git errors pass through unchanged, and operational/configuration failures never become findings. Output writing, analyzers, reports, CLI behavior, console rendering, exit codes, generic source refactoring, and GitHub support are excluded from this decision.
+
+**Rationale:** One validated canonical configuration snapshot prevents configuration drift between repository assembly and future analyzers while keeping the Task 10.5 builder and later CLI responsibilities separate. A minimal source input avoids prematurely coupling configuration selection, output policy, or Commander.js behavior to repository-context construction.
+
+**Consequences:** Future local orchestration must reuse the session's `LoadedConfig.config` reference and `workspaceBase`, and use its canonical `configPath` when generating analysis identities. It must not reload configuration during the same run. The future full `RepositorySource` adaptation, CLI-relative requirements policy, analysis pipeline, and GitHub adapter require separate approved work.
