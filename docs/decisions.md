@@ -401,3 +401,26 @@ Required mapped files are loaded atomically through `git cat-file`: verify objec
 **Rationale:** Captured SHAs prevent dirty working trees, branch movement, and later commits from changing patch or content inputs. Literal pathspecs preserve valid unusual Git paths. Object type/size checks avoid filesystem reads and prevent loading an oversized blob. Patch omissions are recoverable because changed-file metadata remains useful, while missing required mapped source prevents contract analysis.
 
 **Consequences:** Task 10.1 intentionally remains unchanged and buffers UTF-8 stdout. Patch-size checks are post-capture rather than stream-time bounds. The runner cannot strictly identify invalid UTF-8 byte sequences after decoding; Task 10.4 can classify NUL content and byte-length mismatch only. Task 10.5 must later enforce the authoritative cross-repository text budget, including retained patches and requirements text, and must aggregate loader warnings into `RepositoryContext`.
+
+
+---
+
+## ADR-035: Local Repository Context Assembly
+
+**Status:** ACCEPTED
+
+**Decision:** Task 10.5 provides `buildLocalRepositoryContext`, a lower-level builder that receives an already structurally and relationally validated `DevGuardConfig`. Production YAML loading, `RepositorySource.loadContext`, `LocalRepositorySource`, CLI path interpretation, analyzer invocation, report construction, and output behavior remain Milestone 11 responsibilities.
+
+`workspaceBase` is the directory containing the already-loaded `.devguard.yml`. The builder uses it only to resolve configured repository paths and selected filesystem requirements paths. Supported combinations remain one frontend, backend, or fullstack repository, or one frontend plus one backend repository. Repositories are processed sequentially in code-point repository-ID order.
+
+Task 10.5 owns mapped complete-file selection: it adds the configured OpenAPI path to its configured repository and each contract TypeScript file to its configured repository. It preserves exact configured path text, groups by repository ID, code-point sorts paths, and exact-deduplicates within each repository. Mapped files load from Task 10.4 regardless of whether they changed. A duplicate exact mapped path loads once; the same path in distinct repositories remains distinct.
+
+Task 10.5 converts patch warnings to stable strings using JSON-encoded repository IDs and paths, and requirements warnings using JSON-encoded source and optional safe path text. Patch warnings sort by repository ID, path, code, and message before flattening. Combined warning strings are exact-deduplicated and code-point sorted. Requirements source selection is explicit builder input first, then `testing.requirementsFile`, then none; the selected file is loaded from the filesystem relative to `workspaceBase` with `workspaceBase` as its allowed root.
+
+The authoritative aggregate retained-text limit is exactly 20 MiB. It counts UTF-8 bytes for every retained `RepositoryFile.content`, every retained `ChangedFile.patch`, and optional requirements content. Warnings and omitted patches do not count. Duplicate `ChangedFile` patch fields count once per retained record even when their text is identical. Overflow is fatal, does not truncate or omit retained domain data, and returns no partial context.
+
+Context construction is all-or-nothing for fatal validation, Git metadata, required file, invariant, and aggregate-budget failures. Patch and optional requirements failures remain recoverable warnings. The result has fixed `sourceType: 'local'`, fixed `sourceLabel: 'Local Git Repositories'`, deterministic repository/file/warning ordering, and no metadata. Lower-level typed repository validation, diff, and required-file errors pass through unchanged. No working-tree reads or reference re-resolution are permitted after Task 10.2's captured descriptors.
+
+**Rationale:** A small deterministic builder composes the committed immutable Git boundaries without duplicating Git behavior or prematurely implementing the production source adapter. Explicit ownership for mapped paths, warnings, requirements, and the cross-repository budget keeps the future Milestone 11 orchestration thin while preserving safe, reproducible local contexts.
+
+**Consequences:** The builder can assemble one or two supported repositories for later analyzers, but it does not run analyzers or reports and does not read configuration files. Future Milestone 11 code must supply the validated configuration and `workspaceBase`, may define process-relative CLI requirements behavior before calling this builder, and must not change the builder's immutable Git or aggregate-retained-text guarantees.
