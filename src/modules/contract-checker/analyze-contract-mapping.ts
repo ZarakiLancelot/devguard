@@ -71,19 +71,11 @@ export function analyzeContractMapping(
   const warnings: ContractAnalysisWarning[] = [];
   const unsupportedCandidates: UnsupportedFindingCandidate[] = [];
 
-  let openApiLoadResult: ReturnType<typeof loadOpenApiDocument>;
-  try {
-    openApiLoadResult = loadOpenApiDocument({
-      content: input.openapi.content,
-      ...(input.openapi.format === undefined ? {} : { format: input.openapi.format }),
-      sourceLabel: input.openapi.file,
-    });
-  } catch {
-    warnings.push(
-      createInternalWarning(input, 'openapi', 'OPENAPI_PARSE_FAILED', input.openapi.file),
-    );
-    return createResult(input.mappingName, [], warnings, false);
-  }
+  const openApiLoadResult: ReturnType<typeof loadOpenApiDocument> = loadOpenApiDocument({
+    content: input.openapi.content,
+    ...(input.openapi.format === undefined ? {} : { format: input.openapi.format }),
+    sourceLabel: input.openapi.file,
+  });
 
   if (!openApiLoadResult.success) {
     warnings.push(
@@ -96,18 +88,8 @@ export function analyzeContractMapping(
     warnings.push(createInternalWarning(input, 'openapi', warning.code, input.openapi.file));
   }
 
-  let openApiNormalizationResult: ReturnType<typeof normalizeOpenApiSchema>;
-  try {
-    openApiNormalizationResult = normalizeOpenApiSchema(
-      openApiLoadResult.document,
-      input.openapi.schemaName,
-    );
-  } catch {
-    warnings.push(
-      createInternalWarning(input, 'openapi', 'OPENAPI_SCHEMA_INVALID', input.openapi.file),
-    );
-    return createResult(input.mappingName, [], warnings, false);
-  }
+  const openApiNormalizationResult: ReturnType<typeof normalizeOpenApiSchema> =
+    normalizeOpenApiSchema(openApiLoadResult.document, input.openapi.schemaName);
 
   appendOpenApiNormalizationWarnings(
     input,
@@ -171,9 +153,8 @@ export function analyzeContractMapping(
     );
   }
 
-  let typeScriptLoadResult: ReturnType<typeof loadTypeScriptDeclaration>;
-  try {
-    typeScriptLoadResult = loadTypeScriptDeclaration(
+  const typeScriptLoadResult: ReturnType<typeof loadTypeScriptDeclaration> =
+    loadTypeScriptDeclaration(
       {
         content: input.typescript.content,
         fileName: input.typescript.file,
@@ -181,17 +162,6 @@ export function analyzeContractMapping(
       },
       input.typescript.declarationName,
     );
-  } catch {
-    warnings.push(
-      createInternalWarning(input, 'typescript', 'TYPESCRIPT_PARSE_FAILED', input.typescript.file),
-    );
-    return createResult(
-      input.mappingName,
-      createUnsupportedFindings(unsupportedCandidates),
-      warnings,
-      false,
-    );
-  }
 
   if (!typeScriptLoadResult.success) {
     appendTypeScriptLoadWarnings(
@@ -264,27 +234,8 @@ export function analyzeContractMapping(
     warnings,
   );
 
-  let typeScriptNormalizationResult: ReturnType<typeof normalizeTypeScriptDeclaration>;
-  try {
-    typeScriptNormalizationResult = normalizeTypeScriptDeclaration(
-      typeScriptLoadResult.declaration,
-    );
-  } catch {
-    warnings.push(
-      createInternalWarning(
-        input,
-        'typescript',
-        'TYPESCRIPT_DECLARATION_INVALID',
-        input.typescript.file,
-      ),
-    );
-    return createResult(
-      input.mappingName,
-      createUnsupportedFindings(unsupportedCandidates),
-      warnings,
-      false,
-    );
-  }
+  const typeScriptNormalizationResult: ReturnType<typeof normalizeTypeScriptDeclaration> =
+    normalizeTypeScriptDeclaration(typeScriptLoadResult.declaration);
 
   if (!typeScriptNormalizationResult.success) {
     if (typeScriptNormalizationResult.error.code === 'TYPESCRIPT_DECLARATION_EMPTY') {
