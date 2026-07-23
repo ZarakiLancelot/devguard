@@ -367,3 +367,18 @@ Configured `baseRef` text is preserved for report-facing traceability while its 
 **Rationale:** Canonical top-level paths give later file loading one stable repository boundary without breaking documented sibling repositories. Captured full commit IDs support detached HEADs, deterministic analysis identities, and future immutable diff inputs. Narrow input prevalidation avoids ambiguous/control input and unsafe option-like values without imposing an unapproved Git-version requirement for `--end-of-options`.
 
 **Consequences:** Repository validation does not impose containment beneath the workspace, config directory, or current directory. It does not inspect a literal `.git` directory, dirty state, merge bases, shallow history, diffs, changed files, patches, or repository contents. Merge-base validation, dirty-state behavior, shallow/unrelated-history semantics, and diff execution are deferred to Task 10.3. Public validation errors use safe typed codes and do not disclose paths, refs, commands, Git output, or filesystem diagnostics.
+
+
+---
+
+## ADR-033: Local Git Changed-File Metadata Semantics
+
+**Status:** ACCEPTED
+
+**Decision:** Task 10.3 compares the immutable Task 10.2 commit IDs using `baseCommit...headRef`. Before diffing, DevGuard runs `git merge-base --all` against those SHAs. No merge base or multiple best merge bases is fatal. The metadata command uses NUL-delimited `--name-status` output with external diff helpers and text conversion disabled, plus an explicit 50% rename threshold.
+
+`A`, `M`, and `D` map directly to the domain statuses. Renames map source to `previousPath` and destination to `path`; similarity scores are validated then discarded. Copies and supported-but-unrepresented status letters map to `unknown`, preserving a destination path where the current model can represent one. Git paths are validated as repository-relative POSIX paths; literal POSIX backslashes are preserved rather than rewritten. Results are code-point sorted and exact duplicate records are preserved.
+
+**Rationale:** Captured SHAs prevent moving refs from changing the comparison. Strict NUL parsing preserves valid unusual filenames and eliminates quote-configuration dependence. Explicit merge-base and rename policies make otherwise ambiguous Git behavior deterministic. Sorting prevents Git configuration such as `diff.orderFile` from affecting public-domain order.
+
+**Consequences:** The 500-record limit applies per repository. Overflow is fatal and never truncated. The existing Git runner buffers complete stdout, so this count prevents downstream processing but is not a stream-time memory bound; a future bounded-runner contract is required for that protection. Patch retrieval, line counts, binary handling, and complete file loading remain Task 10.4 responsibilities.
