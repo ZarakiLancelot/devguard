@@ -481,3 +481,24 @@ Unexpected analyzer, risk-rule, scenario-generator, score-calculator, and analys
 **Rationale:** This operationalizes ADR-037’s one-load session ownership and resolves the historical double-load pseudocode path in `design.md` without rewriting that historical design document. It provides a deterministic, private, testable application boundary while leaving source assembly, analyzers, report formatting, output writing, CLI wiring, console summaries, thresholds, exit codes, and GitHub support in their assigned later scopes.
 
 **Consequences:** Task 11.2–11.4 may reuse the returned `LoadedConfig` internally without reloading configuration, but may not expose it. Output selection/writing, Markdown/JSON formatting selection, Commander behavior, verbosity, fail-below policy, console summaries, exit codes, and all GitHub/Octokit behavior remain out of scope for this decision.
+
+
+---
+
+## ADR-039: CLI Analysis Adapter and Safe Error Presentation
+
+**Status:** ACCEPTED
+
+**Decision:** Task 11.2 maps only the required lexical `devguard analyze local --config <path>` value to one `analyzeRepository` invocation. `runAnalyzeLocal` is the narrow CLI-to-application adapter: it reads working directory exactly once during command execution through an injected dependency, forwards the lexical configuration text unchanged with that working directory, and returns the unchanged internal `AnalyzeRepositoryResult`. It neither reloads configuration nor creates another session, source, context, analyzer run, report, or output operation.
+
+The Commander program receives factory-scoped injected dependencies for analysis, working-directory lookup, stdout, and stderr. It uses Commander `exitOverride` and configured output writers so reusable program parsing never directly terminates Node and tests do not require global stream or console mocks. The executable entrypoint uses controlled `parseAsync`; only that entrypoint may assign `process.exitCode`. Task 11.2 uses provisional generic code `1` for handled analysis or unexpected entrypoint failure. Final documented/tested exit-code taxonomy remains Task 11.3.
+
+Successful Task 11.2 execution emits only `DevGuard local analysis completed.` followed by a newline. It does not format, serialize, print, or write the report. `LoadedConfig`, canonical configuration paths, workspace bases, repository paths, source content, requirements, patches, findings, warnings, scores, generated tests, and report metadata remain private. The command action discards the returned result after successful completion.
+
+Known in-process DevGuard fatal errors use a closed CLI-owned code-to-safe-message table. The CLI never renders arbitrary error messages, names, stacks, causes, issue locations, or foreign object properties. Unknown thrown values render only `INTERNAL_ERROR` with a generic message. After rendering an analysis error, the action throws one CLI-owned handled-failure signal with no retained original cause. Commander syntax errors, unknown options/commands, help, and version remain Commander-controlled behavior and are not sent through the analysis-error presenter.
+
+Task 11.2 temporarily removes placeholder `--requirements`, `--output`, `--verbose`, and `--fail-below` options from the active command. Their intended spellings are reserved for Task 11.3, which owns requirements-path semantics, output directories/formats/filenames/writing, verbose mode, fail-below behavior, output-error taxonomy, and final exit codes. Task 11.4 owns the polished console summary. `--format` is not introduced.
+
+**Rationale:** One small injected adapter preserves ADR-037 and ADR-038 single-session ownership while making the real local command safe, deterministic, testable, and usable without prematurely establishing output, requirements, or exit policies. A closed error renderer prevents low-level diagnostics and retained causes from reaching terminal output.
+
+**Consequences:** Task 11.2 does not modify application, source, configuration, analyzer, report, formatter, writer, or path-security behavior. It does not create files/directories, implement report output, or add GitHub support. ADR-040 is reserved for Task 11.3 output and exit policies.
