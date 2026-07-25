@@ -60,10 +60,15 @@ import {
 } from './local-git-diff-provider.js';
 import {
   buildLocalRepositoryContext,
+  createBuildLocalRepositoryContext,
   MAX_CONTEXT_TEXT_BYTES,
   type BuildLocalRepositoryContextInput,
   type LocalRepositoryContextError,
 } from './local-context-builder.js';
+import {
+  ExplicitRequirementsOverrideError,
+  type ExplicitRequirementsOverride,
+} from './explicit-requirements-override-loader.js';
 import { validateGitRepository, type ValidatedGitRepository } from './git-repository-validator.js';
 import { loadChangedFilePatches, type GitPatchWarning } from './repository-patch-loader.js';
 import { GitFileLoadError, loadRepositoryFiles } from './repository-file-loader.js';
@@ -318,7 +323,13 @@ describe('buildLocalRepositoryContext mocked composition', () => {
       };
     });
 
-    const context = await buildLocalRepositoryContext(makeInput(config));
+    const strictLoader = vi.fn().mockResolvedValue({ text: 'unused' });
+    const builder = createBuildLocalRepositoryContext({
+      loadExplicitRequirementsOverride: strictLoader,
+    });
+    const context = await builder(makeInput(config));
+
+    expect(strictLoader).not.toHaveBeenCalled();
 
     expect(events).toEqual([
       'validate:api-base',
@@ -584,26 +595,123 @@ describe('buildLocalRepositoryContext mocked composition', () => {
     ]);
   });
 
-  it('selects CLI requirements before config, uses workspaceBase as both loader roots, and retains content', async () => {
+  it('loads an explicit override once before every repository dependency, retains its text, and bypasses configured requirements loading', async () => {
     const config = makeConfig({ testing: { requirementsFile: 'config-requirements.md' } });
-    mocks.loadRequirementsText.mockResolvedValue({
-      source: 'cli',
-      selectedPath: 'cli-requirements.md',
-      content: 'The required behaviour.',
-      warnings: [],
-    });
-
-    const context = await buildLocalRepositoryContext(
-      makeInput(config, { requirementsPath: 'cli-requirements.md' }),
-    );
-
-    expect(loadRequirementsText).toHaveBeenCalledWith({
-      source: 'cli',
+    const override: ExplicitRequirementsOverride = {
       path: 'cli-requirements.md',
-      baseDirectory: '/workspace/config',
-      allowedRoot: '/workspace/config',
+      baseDirectory: '/captured/working-directory',
+      required: true,
+    };
+    const events: string[] = [];
+    const strictLoader = vi.fn(async () => {
+      events.push('strict');
+      return { text: 'Explicit requirements text.' };
     });
-    expect(context.requirements).toBe('The required behaviour.');
+    const dependencies = { loadExplicitRequirementsOverride: strictLoader };
+    const builder = createBuildLocalRepositoryContext(dependencies);
+    mocks.resolveRepositoryPath.mockImplementation(
+      (workspaceBase: string, repositoryPath: string) => {
+        events.push('resolve');
+        return { valid: true, resolvedPath: path.join(workspaceBase, repositoryPath) };
+      },
+    );
+    mocks.validateGitRepository.mockImplementation(
+      async ({ repositoryPath, baseRef }: { repositoryPath: string; baseRef: string }) => {
+        events.push('validate');
+        return repositoryDescriptor(repositoryPath, baseRef);
+      },
+    );
+    mocks.loadChangedFiles.mockImplementation(async ({ repositoryId }: LoadChangedFilesInput) => {
+      events.push('diff');
+      return [{ repositoryId, path: 'src/app.ts', status: 'modified' }];
+    });
+    mocks.loadChangedFilePatches.mockImplementation(
+      async ({ changedFiles }: { changedFiles: readonly ChangedFile[] }) => {
+        events.push('patch');
+        return { changedFiles, warnings: [] };
+      },
+    );
+    mocks.loadRepositoryFiles.mockImplementation(
+      async ({ repositoryId, paths }: { repositoryId: string; paths: readonly string[] }) => {
+        events.push('files');
+        return { files: paths.map((filePath) => repositoryFile(repositoryId, filePath, filePath)) };
+      },
+    );
+    mocks.loadRequirementsText.mockImplementation(async () => {
+      events.push('configured');
+      return { source: 'config', selectedPath: 'config-requirements.md', warnings: [] };
+    });
+    const beforeOverride = structuredClone(override);
+    const originalDependency = dependencies.loadExplicitRequirementsOverride;
+    const log = vi.spyOn(console, 'log');
+    const stdout = vi.spyOn(process.stdout, 'write');
+    const stderr = vi.spyOn(process.stderr, 'write');
+
+    try {
+      const context = await builder(makeInput(config, { requirementsOverride: override }));
+
+      expect(strictLoader).toHaveBeenCalledTimes(1);
+      expect(strictLoader).toHaveBeenCalledWith(override);
+      expect((strictLoader.mock.calls as unknown as [ExplicitRequirementsOverride][])[0]?.[0]).toBe(
+        override,
+      );
+      expect(events).toEqual(['strict', 'resolve', 'validate', 'diff', 'patch', 'files']);
+      expect(loadRequirementsText).not.toHaveBeenCalled();
+      expect(context.requirements).toBe('Explicit requirements text.');
+      expect(context.warnings).toEqual([]);
+      expect(context).not.toHaveProperty('requirementsOverride');
+      expect(JSON.stringify(context)).not.toContain(override.path);
+      expect(JSON.stringify(context)).not.toContain(override.baseDirectory);
+      expect(override).toEqual(beforeOverride);
+      expect(dependencies.loadExplicitRequirementsOverride).toBe(originalDependency);
+      expect(log).not.toHaveBeenCalled();
+      expect(stdout).not.toHaveBeenCalled();
+      expect(stderr).not.toHaveBeenCalled();
+    } finally {
+      log.mockRestore();
+      stdout.mockRestore();
+      stderr.mockRestore();
+    }
+  });
+
+  it.each([
+    ['typed', new ExplicitRequirementsOverrideError('REQUIREMENTS_OVERRIDE_NOT_FOUND', 'ignored')],
+    ['unknown', { private: 'unknown strict failure' }],
+  ])('propagates a %s strict-loader failure before repository work', async (_name, failure) => {
+    const config = makeConfig({ testing: { requirementsFile: 'config-requirements.md' } });
+    const override: ExplicitRequirementsOverride = {
+      path: 'requirements.md',
+      baseDirectory: '/captured/working-directory',
+      required: true,
+    };
+    const strictLoader = vi.fn().mockRejectedValue(failure);
+    const builder = createBuildLocalRepositoryContext({
+      loadExplicitRequirementsOverride: strictLoader,
+    });
+    const log = vi.spyOn(console, 'log');
+    const stdout = vi.spyOn(process.stdout, 'write');
+    const stderr = vi.spyOn(process.stderr, 'write');
+
+    try {
+      await expect(
+        builder(makeInput(config, { workspaceBase: '', requirementsOverride: override })),
+      ).rejects.toBe(failure);
+
+      expect(strictLoader).toHaveBeenCalledTimes(1);
+      expect(mocks.resolveRepositoryPath).not.toHaveBeenCalled();
+      expect(mocks.validateGitRepository).not.toHaveBeenCalled();
+      expect(mocks.loadChangedFiles).not.toHaveBeenCalled();
+      expect(mocks.loadChangedFilePatches).not.toHaveBeenCalled();
+      expect(mocks.loadRepositoryFiles).not.toHaveBeenCalled();
+      expect(mocks.loadRequirementsText).not.toHaveBeenCalled();
+      expect(log).not.toHaveBeenCalled();
+      expect(stdout).not.toHaveBeenCalled();
+      expect(stderr).not.toHaveBeenCalled();
+    } finally {
+      log.mockRestore();
+      stdout.mockRestore();
+      stderr.mockRestore();
+    }
   });
 
   it('falls back to configured requirements and does not call the loader without a selected source', async () => {

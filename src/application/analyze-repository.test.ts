@@ -10,6 +10,7 @@ import { GitDiffError } from '../sources/local-git-diff-provider.js';
 import { GitRepositoryValidationError } from '../sources/git-repository-validator.js';
 import { GitFileLoadError } from '../sources/repository-file-loader.js';
 import { LocalRepositoryContextError } from '../sources/local-context-builder.js';
+import { ExplicitRequirementsOverrideError } from '../sources/explicit-requirements-override-loader.js';
 import type { DevGuardConfig } from '../config/config-schema.js';
 import type {
   AnalyzeContractMappingInput,
@@ -32,10 +33,15 @@ import type { GeneratedTest } from '../types/tests.js';
 
 const FIXED_TIME = new Date('2026-07-23T01:02:03.000Z');
 const CANONICAL_CONFIG_PATH = '/private/canonical/workspace/.devguard.yml';
+const REQUIREMENTS_OVERRIDE = {
+  path: ' ./requirements override.md ',
+  baseDirectory: '/caller/working-directory',
+  required: true,
+} as const;
 const INPUT: AnalyzeRepositoryInput = {
   configPath: './selected/.devguard.yml',
   workingDirectory: '/caller/working-directory',
-  requirementsPath: ' ./requirements override.md ',
+  requirementsOverride: REQUIREMENTS_OVERRIDE,
 };
 
 interface Harness {
@@ -347,8 +353,11 @@ describe('analyzeRepository', () => {
       });
       expect(harness.loadContext).toHaveBeenCalledTimes(1);
       expect(harness.loadContext).toHaveBeenCalledWith({
-        requirementsPath: INPUT.requirementsPath,
+        requirementsOverride: input.requirementsOverride,
       });
+      expect(harness.loadContext.mock.calls[0]?.[0]?.requirementsOverride).toBe(
+        input.requirementsOverride,
+      );
       expect(result.loadedConfig).toBe(harness.loadedConfig);
 
       expect(harness.analyzeContractMapping).toHaveBeenCalledTimes(2);
@@ -502,6 +511,21 @@ describe('analyzeRepository', () => {
 
     await expect(analyze(INPUT)).rejects.toBe(failure);
     expect(harness.analyzeContractMapping).not.toHaveBeenCalled();
+    expect(harness.buildReport).not.toHaveBeenCalled();
+  });
+
+  it('propagates fatal explicit override failures unchanged before any analyzer or report work', async () => {
+    const harness = createHarness();
+    const failure = new ExplicitRequirementsOverrideError(
+      'REQUIREMENTS_OVERRIDE_NOT_FOUND',
+      'ignored',
+    );
+    harness.loadContext.mockRejectedValue(failure);
+
+    await expect(createAnalyzeRepository(harness.dependencies)(INPUT)).rejects.toBe(failure);
+    expect(harness.analyzeContractMapping).not.toHaveBeenCalled();
+    expect(harness.createTestScenarios).not.toHaveBeenCalled();
+    expect(harness.calculateScore).not.toHaveBeenCalled();
     expect(harness.buildReport).not.toHaveBeenCalled();
   });
 

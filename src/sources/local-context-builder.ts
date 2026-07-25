@@ -10,6 +10,10 @@ import type {
 import { loadChangedFiles } from './local-git-diff-provider.js';
 import { loadChangedFilePatches, type GitPatchWarning } from './repository-patch-loader.js';
 import { loadRepositoryFiles } from './repository-file-loader.js';
+import {
+  loadExplicitRequirementsOverride,
+  type ExplicitRequirementsOverride,
+} from './explicit-requirements-override-loader.js';
 import { loadRequirementsText, type RequirementsLoadWarning } from './requirements-text-loader.js';
 import { validateGitRepository } from './git-repository-validator.js';
 
@@ -28,8 +32,8 @@ export interface BuildLocalRepositoryContextInput {
   workspaceBase: string;
   /** Configuration that has already completed structural and relational validation. */
   config: DevGuardConfig;
-  /** An already-selected CLI requirements path, when one was provided. */
-  requirementsPath?: string;
+  /** A caller-selected, required CLI requirements override. */
+  requirementsOverride?: ExplicitRequirementsOverride;
 }
 
 export type LocalRepositoryContextErrorCode =
@@ -48,6 +52,16 @@ export class LocalRepositoryContextError extends Error {
   }
 }
 
+export interface BuildLocalRepositoryContextDependencies {
+  loadExplicitRequirementsOverride: typeof loadExplicitRequirementsOverride;
+}
+
+const DEFAULT_DEPENDENCIES: Readonly<BuildLocalRepositoryContextDependencies> = Object.freeze({
+  loadExplicitRequirementsOverride,
+});
+
+const defaultBuildLocalRepositoryContext = createBuildLocalRepositoryContext();
+
 /**
  * Builds one deterministic local RepositoryContext from an already validated configuration.
  * It intentionally does not parse configuration, adapt RepositorySource, invoke analyzers,
@@ -56,6 +70,30 @@ export class LocalRepositoryContextError extends Error {
 export async function buildLocalRepositoryContext(
   input: BuildLocalRepositoryContextInput,
 ): Promise<RepositoryContext> {
+  return defaultBuildLocalRepositoryContext(input);
+}
+
+/** Creates an isolated context builder with immutable factory-scoped dependencies. */
+export function createBuildLocalRepositoryContext(
+  overrides: Partial<BuildLocalRepositoryContextDependencies> = {},
+): (input: BuildLocalRepositoryContextInput) => Promise<RepositoryContext> {
+  const dependencies: BuildLocalRepositoryContextDependencies = {
+    ...DEFAULT_DEPENDENCIES,
+    ...overrides,
+  };
+
+  return async (input: BuildLocalRepositoryContextInput): Promise<RepositoryContext> =>
+    buildLocalRepositoryContextWithDependencies(input, dependencies);
+}
+
+async function buildLocalRepositoryContextWithDependencies(
+  input: BuildLocalRepositoryContextInput,
+  dependencies: BuildLocalRepositoryContextDependencies,
+): Promise<RepositoryContext> {
+  const explicitRequirementsText =
+    input.requirementsOverride === undefined
+      ? undefined
+      : (await dependencies.loadExplicitRequirementsOverride(input.requirementsOverride)).text;
   const repositoryEntries = getValidatedRepositoryEntries(input);
   const mappedPaths = selectMappedPaths(
     input.config,
@@ -108,7 +146,10 @@ export async function buildLocalRepositoryContext(
     patchWarnings.push(...copyPatchWarnings(patchedResult.warnings));
   }
 
-  const requirementsResult = await loadSelectedRequirements(input);
+  const requirementsResult =
+    explicitRequirementsText === undefined
+      ? await loadSelectedRequirements(input)
+      : { content: explicitRequirementsText, warnings: [] };
   const requirements = requirementsResult?.content;
   if (requirements !== undefined) {
     retainedTextBytes = addRetainedTextBytes(retainedTextBytes, requirements);
@@ -283,7 +324,6 @@ async function loadSelectedRequirements(
   input: BuildLocalRepositoryContextInput,
 ): Promise<Awaited<ReturnType<typeof loadRequirementsText>> | undefined> {
   const selection = selectRequirementsSource({
-    ...(input.requirementsPath === undefined ? {} : { cliPath: input.requirementsPath }),
     ...(input.config.testing?.requirementsFile === undefined
       ? {}
       : { configPath: input.config.testing.requirementsFile }),

@@ -10,6 +10,7 @@ import { buildReport } from '../reports/report-builder.js';
 import { generateAnalysisId } from '../shared/ids.js';
 import { createLocalAnalysisSession } from './create-local-analysis-session.js';
 import { AnalyzeRepositoryError, createRepositoryFileIndex } from './repository-file-index.js';
+import type { ExplicitRequirementsOverride } from '../sources/explicit-requirements-override-loader.js';
 import { formatContractWarning } from './contract-warning-formatter.js';
 import type { LoadedConfig } from '../config/config-loader.js';
 import type { ChangedFile, RepositoryContext } from '../types/repository.js';
@@ -23,7 +24,7 @@ export { AnalyzeRepositoryError } from './repository-file-index.js';
 export interface AnalyzeRepositoryInput {
   configPath: string;
   workingDirectory: string;
-  requirementsPath?: string;
+  requirementsOverride?: ExplicitRequirementsOverride;
 }
 
 export interface AnalyzeRepositoryResult {
@@ -95,7 +96,9 @@ export function createAnalyzeRepository(
       workingDirectory: input.workingDirectory,
     });
     const context = await session.source.loadContext(
-      input.requirementsPath === undefined ? {} : { requirementsPath: input.requirementsPath },
+      input.requirementsOverride === undefined
+        ? {}
+        : { requirementsOverride: input.requirementsOverride },
     );
     const config = session.loadedConfig.config;
     const fileIndex = createRepositoryFileIndex(context.files);

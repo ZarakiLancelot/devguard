@@ -67,20 +67,28 @@ describe('LocalRepositorySource', () => {
     mocks.buildLocalRepositoryContext.mockResolvedValue(returnedContext);
     const source = new LocalRepositorySource({ loadedConfig });
 
-    const result = await source.loadContext({ requirementsPath: 'requirements.md' });
+    const override = {
+      path: 'requirements.md',
+      baseDirectory: '/caller',
+      required: true,
+    } as const;
+    const result = await source.loadContext({ requirementsOverride: override });
 
     expect(Reflect.get(source, 'loadedConfig')).toBe(loadedConfig);
     expect(buildLocalRepositoryContext).toHaveBeenCalledTimes(1);
     expect(buildLocalRepositoryContext).toHaveBeenCalledWith({
       workspaceBase: loadedConfig.workspaceBase,
       config: loadedConfig.config,
-      requirementsPath: 'requirements.md',
+      requirementsOverride: override,
     });
+    expect(mocks.buildLocalRepositoryContext.mock.calls[0]?.[0]?.requirementsOverride).toBe(
+      override,
+    );
     expect(mocks.buildLocalRepositoryContext.mock.calls[0]?.[0]?.config).toBe(loadedConfig.config);
     expect(result).toBe(returnedContext);
   });
 
-  it('omits an undefined requirements path rather than resolving or reconstructing it', async () => {
+  it('omits an undefined requirements override rather than resolving or reconstructing it', async () => {
     const loadedConfig = createLoadedConfig();
     const source = new LocalRepositorySource({ loadedConfig });
 
@@ -91,13 +99,19 @@ describe('LocalRepositorySource', () => {
       config: loadedConfig.config,
     });
     expect(mocks.buildLocalRepositoryContext.mock.calls[0]?.[0]).not.toHaveProperty(
-      'requirementsPath',
+      'requirementsOverride',
     );
   });
 
   it('does not mutate caller inputs or the LoadedConfig snapshot, and does not log', async () => {
     const loadedConfig = createLoadedConfig();
-    const input = { requirementsPath: './raw/requirements.md' };
+    const input = {
+      requirementsOverride: {
+        path: './raw/requirements.md',
+        baseDirectory: '/caller',
+        required: true as const,
+      },
+    };
     const beforeLoadedConfig = structuredClone(loadedConfig);
     const beforeInput = structuredClone(input);
     const consoleLog = vi.spyOn(console, 'log');
@@ -129,6 +143,10 @@ describe('LocalRepositorySource', () => {
     mocks.buildLocalRepositoryContext.mockRejectedValue(error);
     const source = new LocalRepositorySource({ loadedConfig: createLoadedConfig() });
 
-    await expect(source.loadContext({ requirementsPath: 'requirements.md' })).rejects.toBe(error);
+    await expect(
+      source.loadContext({
+        requirementsOverride: { path: 'requirements.md', baseDirectory: '/caller', required: true },
+      }),
+    ).rejects.toBe(error);
   });
 });

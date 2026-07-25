@@ -1,4 +1,5 @@
 import type { LoadedConfig } from '../config/config-loader.js';
+import type { ExplicitRequirementsOverride } from './explicit-requirements-override-loader.js';
 import type { RepositoryContext } from '../types/repository.js';
 import { buildLocalRepositoryContext } from './local-context-builder.js';
 
@@ -9,7 +10,7 @@ export interface LocalRepositorySourceOptions {
 
 /** Per-context inputs that remain after application-owned configuration loading. */
 export interface LocalRepositorySourceLoadInput {
-  requirementsPath?: string;
+  requirementsOverride?: ExplicitRequirementsOverride;
 }
 
 /**
@@ -31,7 +32,9 @@ export class LocalRepositorySource {
     return buildLocalRepositoryContext({
       workspaceBase: this.loadedConfig.workspaceBase,
       config: this.loadedConfig.config,
-      ...(input.requirementsPath === undefined ? {} : { requirementsPath: input.requirementsPath }),
+      ...(input.requirementsOverride === undefined
+        ? {}
+        : { requirementsOverride: input.requirementsOverride }),
     });
   }
 }
