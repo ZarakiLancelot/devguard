@@ -45,10 +45,16 @@ export function createProgram(overrides: Partial<CliDependencies> = {}): Command
     .command('local')
     .description('Analyze local Git repositories')
     .requiredOption('--config <path>', 'Path to .devguard.yml configuration file')
-    .action(async (options: { config: string }) => {
+    .option('--requirements <path>', 'Path to explicit requirements file')
+    .action(async (options: { config: string; requirements?: string }) => {
       try {
         await runAnalyzeLocal(
-          { configPath: options.config },
+          {
+            configPath: options.config,
+            ...(options.requirements === undefined
+              ? {}
+              : { requirementsPath: options.requirements }),
+          },
           {
             analyzeRepository: dependencies.analyzeRepository,
             getWorkingDirectory: dependencies.getWorkingDirectory,

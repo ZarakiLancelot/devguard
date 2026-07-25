@@ -33,6 +33,36 @@ describe('runAnalyzeLocal', () => {
     expect(Object.keys(dependencies)).toEqual(['analyzeRepository', 'getWorkingDirectory']);
   });
 
+  it.each(['', ' ./réquirements "quoted"/../spec.md '])(
+    'forwards an explicit requirements path unchanged with the same captured working directory',
+    async (requirementsPath) => {
+      const analyzeRepository = vi.fn().mockResolvedValue({} as AnalyzeRepositoryResult);
+      const getWorkingDirectory = vi.fn(() => WORKING_DIRECTORY);
+      const input = { configPath: LEXICAL_CONFIG_PATH, requirementsPath };
+      const beforeInput = structuredClone(input);
+      const dependencies = Object.freeze({ analyzeRepository, getWorkingDirectory });
+
+      await runAnalyzeLocal(input, dependencies);
+
+      expect(getWorkingDirectory).toHaveBeenCalledTimes(1);
+      expect(analyzeRepository).toHaveBeenCalledTimes(1);
+      expect(analyzeRepository).toHaveBeenCalledWith({
+        configPath: LEXICAL_CONFIG_PATH,
+        workingDirectory: WORKING_DIRECTORY,
+        requirementsOverride: {
+          path: requirementsPath,
+          baseDirectory: WORKING_DIRECTORY,
+          required: true,
+        },
+      });
+      expect(analyzeRepository.mock.calls[0]?.[0]?.requirementsOverride.path).toBe(
+        requirementsPath,
+      );
+      expect(input).toEqual(beforeInput);
+      expect(Object.keys(dependencies)).toEqual(['analyzeRepository', 'getWorkingDirectory']);
+    },
+  );
+
   it('returns an opaque result unchanged without inspecting LoadedConfig or report', async () => {
     const result = Object.defineProperties({} as AnalyzeRepositoryResult, {
       loadedConfig: {

@@ -11,6 +11,7 @@ import { GitDiffError } from '../sources/local-git-diff-provider.js';
 import { GitRepositoryValidationError } from '../sources/git-repository-validator.js';
 import { GitFileLoadError } from '../sources/repository-file-loader.js';
 import { LocalRepositoryContextError } from '../sources/local-context-builder.js';
+import { ExplicitRequirementsOverrideError } from '../sources/explicit-requirements-override-loader.js';
 
 const LEXICAL_CONFIG_PATH = ' ./selected config/.devguard.yml ';
 const WORKING_DIRECTORY = '/caller/working-directory';
@@ -60,15 +61,67 @@ describe('DevGuard CLI', () => {
     const analyze = program.commands.find((command) => command.name() === 'analyze');
     const local = analyze?.commands.find((command) => command.name() === 'local');
     const configOption = local?.options.find((option) => option.long === '--config');
+    const requirementsOption = local?.options.find((option) => option.long === '--requirements');
 
     expect(program.name()).toBe('devguard');
     expect(analyze).toBeDefined();
     expect(local).toBeDefined();
     expect(configOption?.required).toBe(true);
-    for (const option of ['--requirements', '--output', '--verbose', '--fail-below']) {
+    expect(requirementsOption).toBeDefined();
+    for (const option of ['--output', '--verbose', '--fail-below']) {
       expect(local?.options.some((candidate) => candidate.long === option)).toBe(false);
     }
     expect(local?.options.some((candidate) => candidate.long === '--format')).toBe(false);
+  });
+
+  it('maps the exact lexical requirements option through one analysis using one working-directory capture', async () => {
+    const requirementsPath = ' ./private requirements/../"quoted".md ';
+    const harness = createHarness();
+
+    await createProgram(harness.dependencies).parseAsync(
+      ['analyze', 'local', '--config', LEXICAL_CONFIG_PATH, '--requirements', requirementsPath],
+      { from: 'user' },
+    );
+
+    expect(harness.getWorkingDirectory).toHaveBeenCalledTimes(1);
+    expect(harness.analyzeRepository).toHaveBeenCalledWith({
+      configPath: LEXICAL_CONFIG_PATH,
+      workingDirectory: WORKING_DIRECTORY,
+      requirementsOverride: {
+        path: requirementsPath,
+        baseDirectory: WORKING_DIRECTORY,
+        required: true,
+      },
+    });
+    expect(harness.stdout).toEqual(['DevGuard local analysis completed.\n']);
+  });
+
+  it('renders an explicit override error safely without leaking CLI path or working directory', async () => {
+    const requirementsPath = 'private requirements sentinel';
+    const harness = createHarness();
+    harness.analyzeRepository.mockRejectedValue(
+      new ExplicitRequirementsOverrideError('REQUIREMENTS_OVERRIDE_NOT_FOUND', 'private'),
+    );
+
+    const thrown = await (async () => {
+      try {
+        await createProgram(harness.dependencies).parseAsync(
+          ['analyze', 'local', '--config', 'config.yml', '--requirements', requirementsPath],
+          { from: 'user' },
+        );
+      } catch (error) {
+        return error;
+      }
+      throw new Error('Expected handled failure');
+    })();
+
+    expect(thrown).toBeInstanceOf(CliHandledFailure);
+    expect(harness.stdout).toEqual([]);
+    expect(harness.stderr).toEqual([
+      'DevGuard error [REQUIREMENTS_OVERRIDE_NOT_FOUND]: Requirements override file was not found.\n',
+    ]);
+    expect(harness.stderr.join('')).not.toContain(requirementsPath);
+    expect(harness.stderr.join('')).not.toContain(WORKING_DIRECTORY);
   });
 
   it('does not read the working directory while constructing the program', () => {

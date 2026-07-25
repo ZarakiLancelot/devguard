@@ -5,6 +5,7 @@ import type {
 
 export interface RunAnalyzeLocalInput {
   configPath: string;
+  requirementsPath?: string;
 }
 
 export interface RunAnalyzeLocalDependencies {
@@ -25,5 +26,14 @@ export async function runAnalyzeLocal(
   return dependencies.analyzeRepository({
     configPath: input.configPath,
     workingDirectory,
+    ...(input.requirementsPath === undefined
+      ? {}
+      : {
+          requirementsOverride: {
+            path: input.requirementsPath,
+            baseDirectory: workingDirectory,
+            required: true,
+          },
+        }),
   });
 }
