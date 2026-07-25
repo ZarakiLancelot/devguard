@@ -15,6 +15,10 @@ import {
   ExplicitRequirementsOverrideError,
   type ExplicitRequirementsOverrideErrorCode,
 } from '../sources/explicit-requirements-override-loader.js';
+import {
+  AnalysisOutputError,
+  type AnalysisOutputErrorCode,
+} from '../reports/analysis-output-error.js';
 import type { AnalyzeRepositoryErrorCode } from '../application/analyze-repository.js';
 
 export interface CliErrorPresentation {
@@ -93,6 +97,13 @@ const EXPLICIT_REQUIREMENTS_OVERRIDE_MESSAGES: Readonly<
   REQUIREMENTS_OVERRIDE_EMPTY: 'Requirements override file must not be empty.',
 });
 
+const ANALYSIS_OUTPUT_MESSAGES: Readonly<Record<AnalysisOutputErrorCode, string>> = Object.freeze({
+  OUTPUT_PLAN_INVALID: 'Analysis output configuration is invalid.',
+  OUTPUT_DIRECTORY_PREPARE_FAILED: 'Analysis output directory could not be prepared safely.',
+  OUTPUT_FORMAT_FAILED: 'Analysis reports could not be formatted.',
+  OUTPUT_WRITE_FAILED: 'Analysis report output could not be written safely.',
+});
+
 const ANALYSIS_MESSAGES: Readonly<Record<AnalyzeRepositoryErrorCode, string>> = Object.freeze({
   ANALYSIS_INVARIANT_VIOLATION:
     'Analysis could not be completed because an internal invariant failed.',
@@ -146,6 +157,10 @@ export function presentCliError(error: unknown): CliErrorPresentation {
 
   if (error instanceof ExplicitRequirementsOverrideError) {
     return createPresentation(error.code, EXPLICIT_REQUIREMENTS_OVERRIDE_MESSAGES);
+  }
+
+  if (error instanceof AnalysisOutputError) {
+    return createPresentation(error.code, ANALYSIS_OUTPUT_MESSAGES);
   }
 
   if (error instanceof AnalyzeRepositoryError) {

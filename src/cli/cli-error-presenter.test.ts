@@ -22,6 +22,7 @@ import {
   type ExplicitRequirementsOverrideErrorCode,
 } from '../sources/explicit-requirements-override-loader.js';
 import type { AnalyzeRepositoryErrorCode } from '../application/analyze-repository.js';
+import { AnalysisOutputError } from '../reports/analysis-output-error.js';
 
 function expected(code: string, message: string): CliErrorPresentation {
   return { code, message };
@@ -216,6 +217,40 @@ describe('presentCliError', () => {
       expected('REQUIREMENTS_OVERRIDE_EMPTY', 'Requirements override file must not be empty.'),
     );
     expect(presentCliError(imitation)).toEqual({
+      code: 'INTERNAL_ERROR',
+      message: 'Analysis could not be completed.',
+    });
+  });
+
+  it.each([
+    ['OUTPUT_PLAN_INVALID', 'Analysis output configuration is invalid.'],
+    ['OUTPUT_DIRECTORY_PREPARE_FAILED', 'Analysis output directory could not be prepared safely.'],
+    ['OUTPUT_FORMAT_FAILED', 'Analysis reports could not be formatted.'],
+    ['OUTPUT_WRITE_FAILED', 'Analysis report output could not be written safely.'],
+  ] as const)(
+    'presents shared AnalysisOutputError %s only through the CLI table',
+    (code, message) => {
+      const sentinel = 'private workspace path report content errno temporary-file';
+      const cause = new Error(sentinel);
+      const error = new AnalysisOutputError(code, sentinel, { cause });
+      Object.defineProperties(error, {
+        message: { configurable: true, value: sentinel },
+        stack: { configurable: true, value: sentinel },
+        outputDirectory: { configurable: true, value: sentinel },
+      });
+      const presentation = presentCliError(error);
+      expect(presentation).toEqual(expected(code, message));
+      expect(error.cause).toBe(cause);
+      expect(JSON.stringify(presentation)).not.toContain(sentinel);
+    },
+  );
+
+  it('uses instanceof for shared output errors and rejects plain-object imitations', () => {
+    class DerivedOutputError extends AnalysisOutputError {}
+    expect(presentCliError(new DerivedOutputError('OUTPUT_WRITE_FAILED', 'private'))).toEqual(
+      expected('OUTPUT_WRITE_FAILED', 'Analysis report output could not be written safely.'),
+    );
+    expect(presentCliError({ code: 'OUTPUT_WRITE_FAILED', message: 'private' })).toEqual({
       code: 'INTERNAL_ERROR',
       message: 'Analysis could not be completed.',
     });
