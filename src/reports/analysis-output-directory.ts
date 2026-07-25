@@ -2,21 +2,14 @@ import { mkdir, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { isPathContainedInRoot, resolveOutputFile } from '../config/path-security.js';
 import type { AnalysisOutputPlan } from './analysis-output-plan.js';
+import { AnalysisOutputError } from './analysis-output-error.js';
+
+export { AnalysisOutputError } from './analysis-output-error.js';
+export type { AnalysisOutputErrorCode as AnalysisOutputDirectoryErrorCode } from './analysis-output-error.js';
 
 const ANALYSIS_OUTPUT_DIRECTORY_ERROR_MESSAGE =
   'Analysis output directory could not be prepared safely.';
 const NEW_DIRECTORY_MODE = 0o700;
-
-export type AnalysisOutputDirectoryErrorCode = 'OUTPUT_DIRECTORY_PREPARE_FAILED';
-
-export class AnalysisOutputError extends Error {
-  readonly code: AnalysisOutputDirectoryErrorCode = 'OUTPUT_DIRECTORY_PREPARE_FAILED';
-
-  constructor(cause?: unknown) {
-    super(ANALYSIS_OUTPUT_DIRECTORY_ERROR_MESSAGE, cause === undefined ? undefined : { cause });
-    this.name = 'AnalysisOutputError';
-  }
-}
 
 export interface PrepareAnalysisOutputDirectoryInput {
   workspaceBase: string;
@@ -89,7 +82,11 @@ export async function prepareAnalysisOutputDirectory(
       throw error;
     }
 
-    throw new AnalysisOutputError(error);
+    throw new AnalysisOutputError(
+      'OUTPUT_DIRECTORY_PREPARE_FAILED',
+      ANALYSIS_OUTPUT_DIRECTORY_ERROR_MESSAGE,
+      { cause: error },
+    );
   }
 }
 
@@ -99,14 +96,20 @@ function validateLexicalDirectories(
   const { workspaceBase, plan } = input;
 
   if (!isPathContainedInRoot(plan.outputDirectory, workspaceBase)) {
-    throw new AnalysisOutputError();
+    throw new AnalysisOutputError(
+      'OUTPUT_DIRECTORY_PREPARE_FAILED',
+      ANALYSIS_OUTPUT_DIRECTORY_ERROR_MESSAGE,
+    );
   }
 
   const markdownTarget = resolveOutputFile(plan.outputDirectory, plan.markdownFile);
   const jsonTarget = resolveOutputFile(plan.outputDirectory, plan.jsonFile);
 
   if (!markdownTarget.valid || !jsonTarget.valid) {
-    throw new AnalysisOutputError();
+    throw new AnalysisOutputError(
+      'OUTPUT_DIRECTORY_PREPARE_FAILED',
+      ANALYSIS_OUTPUT_DIRECTORY_ERROR_MESSAGE,
+    );
   }
 
   return {
@@ -127,7 +130,10 @@ async function createContainedDirectories(
     path.isAbsolute(relativeTargetDirectory) ||
     relativeTargetDirectory.split(path.sep).includes('..')
   ) {
-    throw new AnalysisOutputError();
+    throw new AnalysisOutputError(
+      'OUTPUT_DIRECTORY_PREPARE_FAILED',
+      ANALYSIS_OUTPUT_DIRECTORY_ERROR_MESSAGE,
+    );
   }
 
   if (relativeTargetDirectory === '') {
@@ -148,7 +154,10 @@ async function ensureDirectory(directory: string): Promise<void> {
   try {
     const existingStats = await stat(directory);
     if (!existingStats.isDirectory()) {
-      throw new AnalysisOutputError();
+      throw new AnalysisOutputError(
+        'OUTPUT_DIRECTORY_PREPARE_FAILED',
+        ANALYSIS_OUTPUT_DIRECTORY_ERROR_MESSAGE,
+      );
     }
 
     return;
@@ -162,20 +171,29 @@ async function ensureDirectory(directory: string): Promise<void> {
 
   const createdStats = await stat(directory);
   if (!createdStats.isDirectory()) {
-    throw new AnalysisOutputError();
+    throw new AnalysisOutputError(
+      'OUTPUT_DIRECTORY_PREPARE_FAILED',
+      ANALYSIS_OUTPUT_DIRECTORY_ERROR_MESSAGE,
+    );
   }
 }
 
 async function canonicalizeDirectory(directory: string): Promise<string> {
   const directoryStats = await stat(directory);
   if (!directoryStats.isDirectory()) {
-    throw new AnalysisOutputError();
+    throw new AnalysisOutputError(
+      'OUTPUT_DIRECTORY_PREPARE_FAILED',
+      ANALYSIS_OUTPUT_DIRECTORY_ERROR_MESSAGE,
+    );
   }
 
   const canonicalDirectory = await realpath(directory);
   const canonicalStats = await stat(canonicalDirectory);
   if (!canonicalStats.isDirectory()) {
-    throw new AnalysisOutputError();
+    throw new AnalysisOutputError(
+      'OUTPUT_DIRECTORY_PREPARE_FAILED',
+      ANALYSIS_OUTPUT_DIRECTORY_ERROR_MESSAGE,
+    );
   }
 
   return canonicalDirectory;
@@ -183,7 +201,10 @@ async function canonicalizeDirectory(directory: string): Promise<string> {
 
 function assertContained(candidatePath: string, rootPath: string): void {
   if (!isPathContainedInRoot(candidatePath, rootPath)) {
-    throw new AnalysisOutputError();
+    throw new AnalysisOutputError(
+      'OUTPUT_DIRECTORY_PREPARE_FAILED',
+      ANALYSIS_OUTPUT_DIRECTORY_ERROR_MESSAGE,
+    );
   }
 }
 

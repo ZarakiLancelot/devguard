@@ -3,11 +3,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AnalysisOutputPlan } from './analysis-output-plan.js';
+import { AnalysisOutputError as PlanAnalysisOutputError } from './analysis-output-plan.js';
+import { AnalysisOutputError as SharedAnalysisOutputError } from './analysis-output-error.js';
 import {
   AnalysisOutputError as AnalysisOutputDirectoryError,
   type PreparedAnalysisOutputDirectory,
 } from './analysis-output-directory.js';
 import {
+  AnalysisOutputError as CoordinatorAnalysisOutputError,
   coordinateAnalysisOutput,
   createCoordinateAnalysisOutput,
   type AnalysisOutputCoordinatorDependencies,
@@ -143,6 +146,13 @@ afterEach(() => {
 });
 
 describe('coordinateAnalysisOutput', () => {
+  it('uses one shared AnalysisOutputError constructor through every compatibility export', () => {
+    expect(PlanAnalysisOutputError).toBe(SharedAnalysisOutputError);
+    expect(AnalysisOutputDirectoryError).toBe(SharedAnalysisOutputError);
+    expect(CoordinatorAnalysisOutputError).toBe(SharedAnalysisOutputError);
+    expect({ code: 'OUTPUT_WRITE_FAILED' }).not.toBeInstanceOf(SharedAnalysisOutputError);
+  });
+
   it('formats the exact report once per format before preparing directories', async () => {
     const { calls, dependencies } = createDependencies();
     const input = createInput();
@@ -221,7 +231,10 @@ describe('coordinateAnalysisOutput', () => {
   });
 
   it('propagates a directory preparation error unchanged by identity', async () => {
-    const preparationError = new AnalysisOutputDirectoryError();
+    const preparationError = new AnalysisOutputDirectoryError(
+      'OUTPUT_DIRECTORY_PREPARE_FAILED',
+      'Analysis output directory could not be prepared safely.',
+    );
     const { dependencies } = createDependencies({
       prepareAnalysisOutputDirectory: vi.fn(async () => {
         throw preparationError;

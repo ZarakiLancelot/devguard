@@ -322,7 +322,10 @@ describe('planAnalysisOutput', () => {
 
     expect(error.code).toBe('OUTPUT_PLAN_INVALID');
     expect(error.message).toBe('Analysis output configuration is invalid.');
-    expect(new AnalysisOutputError().message).toBe('Analysis output configuration is invalid.');
+    expect(
+      new AnalysisOutputError('OUTPUT_PLAN_INVALID', 'Analysis output configuration is invalid.')
+        .message,
+    ).toBe('Analysis output configuration is invalid.');
   });
 
   it('hides underlying path diagnostics', () => {

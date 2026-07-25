@@ -1,23 +1,16 @@
 import path from 'node:path';
 import type { OutputConfig } from '../config/config-schema.js';
 import { resolveOutputDirectory, resolveOutputFile } from '../config/path-security.js';
+import { AnalysisOutputError } from './analysis-output-error.js';
+
+export { AnalysisOutputError } from './analysis-output-error.js';
+export type { AnalysisOutputErrorCode } from './analysis-output-error.js';
 
 export const DEFAULT_OUTPUT_DIRECTORY = '.devguard';
 export const DEFAULT_MARKDOWN_REPORT_FILE = 'devguard-report.md';
 export const DEFAULT_JSON_REPORT_FILE = 'devguard-report.json';
 
 const ANALYSIS_OUTPUT_ERROR_MESSAGE = 'Analysis output configuration is invalid.';
-
-export type AnalysisOutputErrorCode = 'OUTPUT_PLAN_INVALID';
-
-export class AnalysisOutputError extends Error {
-  readonly code: AnalysisOutputErrorCode = 'OUTPUT_PLAN_INVALID';
-
-  constructor() {
-    super(ANALYSIS_OUTPUT_ERROR_MESSAGE);
-    this.name = 'AnalysisOutputError';
-  }
-}
 
 export interface PlanAnalysisOutputInput {
   workspaceBase: string;
@@ -45,7 +38,7 @@ export function planAnalysisOutput(input: PlanAnalysisOutputInput): AnalysisOutp
       throw error;
     }
 
-    throw new AnalysisOutputError();
+    throw new AnalysisOutputError('OUTPUT_PLAN_INVALID', ANALYSIS_OUTPUT_ERROR_MESSAGE);
   }
 }
 
@@ -57,7 +50,7 @@ function createAnalysisOutputPlan(input: PlanAnalysisOutputInput): AnalysisOutpu
 
   const directoryResolution = resolveOutputDirectory(input.workspaceBase, directory);
   if (!directoryResolution.valid) {
-    throw new AnalysisOutputError();
+    throw new AnalysisOutputError('OUTPUT_PLAN_INVALID', ANALYSIS_OUTPUT_ERROR_MESSAGE);
   }
 
   const outputDirectory = directoryResolution.resolvedPath;
@@ -65,7 +58,7 @@ function createAnalysisOutputPlan(input: PlanAnalysisOutputInput): AnalysisOutpu
   const jsonFile = resolveReportFile(outputDirectory, json);
 
   if (markdownFile === jsonFile) {
-    throw new AnalysisOutputError();
+    throw new AnalysisOutputError('OUTPUT_PLAN_INVALID', ANALYSIS_OUTPUT_ERROR_MESSAGE);
   }
 
   return {
@@ -79,17 +72,17 @@ function createAnalysisOutputPlan(input: PlanAnalysisOutputInput): AnalysisOutpu
 
 function resolveReportFile(outputDirectory: string, file: string): string {
   if (file.trim() === '' || file.includes('\u0000') || file.startsWith('\\\\')) {
-    throw new AnalysisOutputError();
+    throw new AnalysisOutputError('OUTPUT_PLAN_INVALID', ANALYSIS_OUTPUT_ERROR_MESSAGE);
   }
 
   const fileResolution = resolveOutputFile(outputDirectory, file);
   if (!fileResolution.valid) {
-    throw new AnalysisOutputError();
+    throw new AnalysisOutputError('OUTPUT_PLAN_INVALID', ANALYSIS_OUTPUT_ERROR_MESSAGE);
   }
 
   const normalizedRelativePath = path.relative(outputDirectory, fileResolution.resolvedPath);
   if (normalizedRelativePath === '' || path.isAbsolute(normalizedRelativePath)) {
-    throw new AnalysisOutputError();
+    throw new AnalysisOutputError('OUTPUT_PLAN_INVALID', ANALYSIS_OUTPUT_ERROR_MESSAGE);
   }
 
   return normalizedRelativePath;
@@ -108,7 +101,7 @@ function createDisplayPath(
     path.isAbsolute(displayPath) ||
     displayPath.split(path.sep).includes('..')
   ) {
-    throw new AnalysisOutputError();
+    throw new AnalysisOutputError('OUTPUT_PLAN_INVALID', ANALYSIS_OUTPUT_ERROR_MESSAGE);
   }
 
   return displayPath.split(path.sep).join('/');

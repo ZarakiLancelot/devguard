@@ -2,10 +2,11 @@ import path from 'node:path';
 import { isPathContainedInRoot, resolveOutputFile } from '../config/path-security.js';
 import { writeFileAtomically } from './atomic-writer.js';
 import type { AnalysisOutputPlan } from './analysis-output-plan.js';
-import {
-  AnalysisOutputError as AnalysisOutputDirectoryError,
-  prepareAnalysisOutputDirectory,
-} from './analysis-output-directory.js';
+import { AnalysisOutputError } from './analysis-output-error.js';
+import { prepareAnalysisOutputDirectory } from './analysis-output-directory.js';
+
+export { AnalysisOutputError } from './analysis-output-error.js';
+export type { AnalysisOutputErrorCode as AnalysisOutputCoordinatorErrorCode } from './analysis-output-error.js';
 import { formatJson } from './json-formatter.js';
 import { formatMarkdown } from './markdown-formatter.js';
 import type { PreparedAnalysisOutputDirectory } from './analysis-output-directory.js';
@@ -13,20 +14,6 @@ import type { PRHealthReport } from '../types/reports.js';
 
 const FORMAT_ERROR_MESSAGE = 'Analysis reports could not be formatted.';
 const WRITE_ERROR_MESSAGE = 'Analysis report output could not be written safely.';
-
-export type AnalysisOutputCoordinatorErrorCode = 'OUTPUT_FORMAT_FAILED' | 'OUTPUT_WRITE_FAILED';
-
-export class AnalysisOutputError extends Error {
-  readonly code: AnalysisOutputCoordinatorErrorCode;
-
-  constructor(code: AnalysisOutputCoordinatorErrorCode, cause?: unknown) {
-    super(code === 'OUTPUT_FORMAT_FAILED' ? FORMAT_ERROR_MESSAGE : WRITE_ERROR_MESSAGE, {
-      cause,
-    });
-    this.code = code;
-    this.name = 'AnalysisOutputError';
-  }
-}
 
 export interface CoordinateAnalysisOutputInput {
   /** Private internal state used only to prepare the canonical output directory. */
@@ -75,7 +62,7 @@ export function createCoordinateAnalysisOutput(
       markdownContent = dependencies.formatMarkdown(input.report);
       jsonContent = dependencies.formatJson(input.report);
     } catch (error) {
-      throw new AnalysisOutputError('OUTPUT_FORMAT_FAILED', error);
+      throw new AnalysisOutputError('OUTPUT_FORMAT_FAILED', FORMAT_ERROR_MESSAGE, { cause: error });
     }
 
     let preparedDirectory: PreparedAnalysisOutputDirectory;
@@ -85,11 +72,11 @@ export function createCoordinateAnalysisOutput(
         plan: input.plan,
       });
     } catch (error) {
-      if (error instanceof AnalysisOutputDirectoryError) {
+      if (error instanceof AnalysisOutputError) {
         throw error;
       }
 
-      throw new AnalysisOutputError('OUTPUT_WRITE_FAILED', error);
+      throw new AnalysisOutputError('OUTPUT_WRITE_FAILED', WRITE_ERROR_MESSAGE, { cause: error });
     }
 
     try {
@@ -115,7 +102,7 @@ export function createCoordinateAnalysisOutput(
         content: jsonContent,
       });
     } catch (error) {
-      throw new AnalysisOutputError('OUTPUT_WRITE_FAILED', error);
+      throw new AnalysisOutputError('OUTPUT_WRITE_FAILED', WRITE_ERROR_MESSAGE, { cause: error });
     }
 
     return {
