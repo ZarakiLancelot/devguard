@@ -11,6 +11,10 @@ import {
   type LocalRepositoryContextErrorCode,
 } from '../sources/local-context-builder.js';
 import { GitFileLoadError, type GitFileLoadErrorCode } from '../sources/repository-file-loader.js';
+import {
+  ExplicitRequirementsOverrideError,
+  type ExplicitRequirementsOverrideErrorCode,
+} from '../sources/explicit-requirements-override-loader.js';
 import type { AnalyzeRepositoryErrorCode } from '../application/analyze-repository.js';
 
 export interface CliErrorPresentation {
@@ -73,6 +77,22 @@ const LOCAL_CONTEXT_MESSAGES: Readonly<Record<LocalRepositoryContextErrorCode, s
       'Local repository source text exceeds the supported total size limit.',
   });
 
+const EXPLICIT_REQUIREMENTS_OVERRIDE_MESSAGES: Readonly<
+  Record<ExplicitRequirementsOverrideErrorCode, string>
+> = Object.freeze({
+  REQUIREMENTS_OVERRIDE_INVALID: 'Requirements override is invalid.',
+  REQUIREMENTS_OVERRIDE_NOT_FOUND: 'Requirements override file was not found.',
+  REQUIREMENTS_OVERRIDE_NOT_REGULAR_FILE: 'Requirements override must be a regular file.',
+  REQUIREMENTS_OVERRIDE_READ_FAILED: 'Requirements override file could not be read.',
+  REQUIREMENTS_OVERRIDE_OUTSIDE_WORKING_DIRECTORY:
+    'Requirements override must remain inside the working directory.',
+  REQUIREMENTS_OVERRIDE_SYMLINK_OUTSIDE_WORKING_DIRECTORY:
+    'Requirements override symlink must remain inside the working directory.',
+  REQUIREMENTS_OVERRIDE_FILE_TOO_LARGE: 'Requirements override file is too large.',
+  REQUIREMENTS_OVERRIDE_INVALID_UTF8: 'Requirements override file must contain valid UTF-8 text.',
+  REQUIREMENTS_OVERRIDE_EMPTY: 'Requirements override file must not be empty.',
+});
+
 const ANALYSIS_MESSAGES: Readonly<Record<AnalyzeRepositoryErrorCode, string>> = Object.freeze({
   ANALYSIS_INVARIANT_VIOLATION:
     'Analysis could not be completed because an internal invariant failed.',
@@ -122,6 +142,10 @@ export function presentCliError(error: unknown): CliErrorPresentation {
 
   if (error instanceof LocalRepositoryContextError) {
     return createPresentation(error.code, LOCAL_CONTEXT_MESSAGES);
+  }
+
+  if (error instanceof ExplicitRequirementsOverrideError) {
+    return createPresentation(error.code, EXPLICIT_REQUIREMENTS_OVERRIDE_MESSAGES);
   }
 
   if (error instanceof AnalyzeRepositoryError) {

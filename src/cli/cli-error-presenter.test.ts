@@ -17,6 +17,10 @@ import {
   type LocalRepositoryContextErrorCode,
 } from '../sources/local-context-builder.js';
 import { GitFileLoadError, type GitFileLoadErrorCode } from '../sources/repository-file-loader.js';
+import {
+  ExplicitRequirementsOverrideError,
+  type ExplicitRequirementsOverrideErrorCode,
+} from '../sources/explicit-requirements-override-loader.js';
 import type { AnalyzeRepositoryErrorCode } from '../application/analyze-repository.js';
 
 function expected(code: string, message: string): CliErrorPresentation {
@@ -132,6 +136,90 @@ describe('presentCliError', () => {
       expect(JSON.stringify(presentation)).not.toContain('/workspace');
     },
   );
+
+  it.each([
+    ['REQUIREMENTS_OVERRIDE_INVALID', 'Requirements override is invalid.'],
+    ['REQUIREMENTS_OVERRIDE_NOT_FOUND', 'Requirements override file was not found.'],
+    ['REQUIREMENTS_OVERRIDE_NOT_REGULAR_FILE', 'Requirements override must be a regular file.'],
+    ['REQUIREMENTS_OVERRIDE_READ_FAILED', 'Requirements override file could not be read.'],
+    [
+      'REQUIREMENTS_OVERRIDE_OUTSIDE_WORKING_DIRECTORY',
+      'Requirements override must remain inside the working directory.',
+    ],
+    [
+      'REQUIREMENTS_OVERRIDE_SYMLINK_OUTSIDE_WORKING_DIRECTORY',
+      'Requirements override symlink must remain inside the working directory.',
+    ],
+    ['REQUIREMENTS_OVERRIDE_FILE_TOO_LARGE', 'Requirements override file is too large.'],
+    [
+      'REQUIREMENTS_OVERRIDE_INVALID_UTF8',
+      'Requirements override file must contain valid UTF-8 text.',
+    ],
+    ['REQUIREMENTS_OVERRIDE_EMPTY', 'Requirements override file must not be empty.'],
+  ] as const)(
+    'presents ExplicitRequirementsOverrideError %s only through the closed CLI table',
+    (code, message) => {
+      const sentinel =
+        'private /canonical/requirements-path working-directory symlink-target errno content UTF-8';
+      const cause = new Error(sentinel);
+      const error = new ExplicitRequirementsOverrideError(
+        code as ExplicitRequirementsOverrideErrorCode,
+        sentinel,
+        { cause },
+      );
+      Object.defineProperties(error, {
+        message: { configurable: true, value: sentinel, writable: true },
+        stack: { configurable: true, value: sentinel, writable: true },
+        path: { configurable: true, value: sentinel, writable: true },
+        baseDirectory: { configurable: true, value: sentinel, writable: true },
+        content: { configurable: true, value: sentinel, writable: true },
+      });
+      const log = vi.spyOn(console, 'log');
+      const stdout = vi.spyOn(process.stdout, 'write');
+      const stderr = vi.spyOn(process.stderr, 'write');
+
+      try {
+        const presentation = presentCliError(error);
+
+        expect(presentation).toEqual(expected(code, message));
+        expect(error.message).toBe(sentinel);
+        expect(error.cause).toBe(cause);
+        expect(error.stack).toBe(sentinel);
+        expect(JSON.stringify(presentation)).not.toContain(sentinel);
+        expect(log).not.toHaveBeenCalled();
+        expect(stdout).not.toHaveBeenCalled();
+        expect(stderr).not.toHaveBeenCalled();
+      } finally {
+        log.mockRestore();
+        stdout.mockRestore();
+        stderr.mockRestore();
+      }
+    },
+  );
+
+  it('recognizes subclasses through instanceof while rejecting matching plain-object imitations', () => {
+    class DerivedExplicitRequirementsOverrideError extends ExplicitRequirementsOverrideError {}
+
+    const derived = new DerivedExplicitRequirementsOverrideError(
+      'REQUIREMENTS_OVERRIDE_EMPTY',
+      'private derived message',
+    );
+    const imitation = Object.freeze({
+      code: 'REQUIREMENTS_OVERRIDE_EMPTY',
+      message: 'private imitation /workspace/requirements.md',
+      cause: new Error('private cause'),
+      path: '/workspace/requirements.md',
+      baseDirectory: '/workspace',
+    });
+
+    expect(presentCliError(derived)).toEqual(
+      expected('REQUIREMENTS_OVERRIDE_EMPTY', 'Requirements override file must not be empty.'),
+    );
+    expect(presentCliError(imitation)).toEqual({
+      code: 'INTERNAL_ERROR',
+      message: 'Analysis could not be completed.',
+    });
+  });
 
   it.each([
     new Error('private message /workspace/source-content'),
