@@ -502,3 +502,32 @@ Task 11.2 temporarily removes placeholder `--requirements`, `--output`, `--verbo
 **Rationale:** One small injected adapter preserves ADR-037 and ADR-038 single-session ownership while making the real local command safe, deterministic, testable, and usable without prematurely establishing output, requirements, or exit policies. A closed error renderer prevents low-level diagnostics and retained causes from reaching terminal output.
 
 **Consequences:** Task 11.2 does not modify application, source, configuration, analyzer, report, formatter, writer, or path-security behavior. It does not create files/directories, implement report output, or add GitHub support. ADR-040 is reserved for Task 11.3 output and exit policies.
+
+
+---
+
+## ADR-040 — Output Planning and Safe Report Publication
+
+**Status:** ACCEPTED
+
+**Decision:** Runtime analysis output defaults are directory `.devguard`, Markdown report `devguard-report.md`, and JSON report `devguard-report.json`. Every successful final analysis execution must produce both Markdown and JSON reports. DevGuard has no format-selection option, and omitting either configured filename never disables that report.
+
+Output-directory selection is, in order: the future CLI `--output` override, `config.output.directory`, then `.devguard`. Markdown selection is `config.output.markdown`, then `devguard-report.md`; JSON selection is `config.output.json`, then `devguard-report.json`. A future CLI directory override changes only the selected output directory and does not reset configured Markdown or JSON filenames.
+
+The selected output directory resolves relative to canonical `LoadedConfig.workspaceBase` and must remain both lexically and canonically contained within `workspaceBase`. Directory values reject empty or whitespace-only input, NUL, POSIX absolute paths, Windows absolute or drive-relative paths, UNC paths, and lexical traversal outside the workspace. Nested relative output directories are allowed.
+
+Markdown and JSON targets are relative to the selected output directory. Nested relative report paths are allowed, but each target must remain inside that directory, must not resolve to the output root itself, and must be distinct after normalization. Targets reject empty or whitespace-only input, NUL, absolute paths, and traversal outside the output directory. The planner does not enforce `.md` or `.json` extensions.
+
+`planAnalysisOutput` is a pure lexical planner: it performs no filesystem access, process-state access, environment-variable access, clock or randomness access, or input mutation. `resolveOutputDirectory` provides pure component-aware lexical containment rather than string-prefix security checks. Internal output plans may contain an absolute lexical output directory; `markdownFile` and `jsonFile` remain normalized relative paths under that directory. Public display paths are normalized relative to the workspace, use `/` separators, and must not contain absolute or canonical path text, leading slashes, or `..` components. Absolute or canonical paths must never enter reports, warnings, findings, CLI output, public error messages, or logs.
+
+Planning failures use code `OUTPUT_PLAN_INVALID` and the exact public message `Analysis output configuration is invalid.` Planning errors never expose raw paths, configuration values, or underlying diagnostics.
+
+Future runtime publication will prepare required directories and then perform canonical `realpath` containment after directory creation. Existing symlinked path components may be accepted only when their canonical targets remain contained within the canonical workspace and output roots. Both report contents will be formatted before any filesystem mutation. Planned publication order is: prepare and validate directories, write Markdown atomically, then write JSON atomically. Individual report replacement is atomic, but the two-report publication is not one transaction. If JSON publication fails after Markdown succeeds, the successful Markdown remains, no rollback is attempted, only writer-owned temporary files are cleaned, and the command fails with a safe output-write error.
+
+Output failures are fatal operational failures. They never become findings, warnings, generated tests, score adjustments, or report content. The approved future output-error taxonomy is `OUTPUT_PLAN_INVALID`, `OUTPUT_DIRECTORY_PREPARE_FAILED`, `OUTPUT_FORMAT_FAILED`, and `OUTPUT_WRITE_FAILED`. Output errors use stable public messages and may retain private causes that are never printed.
+
+The current committed output-planning implementation includes only `resolveOutputDirectory`, `planAnalysisOutput`, defaults, lexical validation, and safe display paths. Directory creation, runtime canonical validation, formatting, atomic publication, and CLI integration remain future Task 11.3 work. Requirements override semantics remain reserved for ADR-041. Final CLI outcomes, verbose behavior, fail-below behavior, and exit-code policy remain reserved for ADR-042. Task 11.4 continues to own the polished console summary.
+
+**Rationale:** A fixed two-report contract supports both developer-readable review artifacts and machine-readable automation without adding an unapproved format-selection surface. Separating pure lexical planning from later runtime filesystem checks keeps deterministic policy testable while ensuring symlink-aware containment is enforced before publication. Stable sanitized errors preserve useful operational boundaries without disclosing workspace paths, configuration values, or filesystem diagnostics.
+
+**Consequences:** Task 11.3 must implement the approved directory preparation, canonical containment, formatting, ordered atomic writes, partial-publication behavior, output-error taxonomy, and CLI directory override without changing planning precedence or display-path rules. It must retain both report outputs on every successful run and must not expose private path diagnostics. Task 11.4 may consume only the approved safe display paths when rendering its polished console summary.
