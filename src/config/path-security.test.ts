@@ -7,6 +7,7 @@ import {
   resolveRepositoryPath,
   resolveFileInRepository,
   resolveFileWithinRoot,
+  resolveOutputDirectory,
   resolveOutputFile,
   resolveRuntimeFileWithinRoot,
 } from './path-security.js';
@@ -131,6 +132,92 @@ describe('path-security', () => {
       if (!result.valid) {
         expect(result.error.code).toBe('INVALID_PATH');
       }
+    });
+  });
+
+  describe('resolveOutputDirectory', () => {
+    it('should resolve contained nested paths and safe dot segments', () => {
+      const nested = resolveOutputDirectory(WORKSPACE, 'reports/daily');
+      const normalized = resolveOutputDirectory(WORKSPACE, './reports/../reports/final');
+
+      expect(nested).toEqual({
+        valid: true,
+        resolvedPath: path.join(WORKSPACE, 'reports/daily'),
+      });
+      expect(normalized).toEqual({
+        valid: true,
+        resolvedPath: path.join(WORKSPACE, 'reports/final'),
+      });
+    });
+
+    it('should resolve contained Unicode, space, and quote directory names', () => {
+      const result = resolveOutputDirectory(WORKSPACE, 'reports/团队 "O\'Connor" notes');
+
+      expect(result).toEqual({
+        valid: true,
+        resolvedPath: path.join(WORKSPACE, 'reports/团队 "O\'Connor" notes'),
+      });
+    });
+
+    it('should reject a workspace base that is not absolute', () => {
+      const result = resolveOutputDirectory('relative/workspace', 'reports');
+
+      expect(result).toMatchObject({ valid: false, error: { code: 'INVALID_PATH' } });
+    });
+
+    it('should reject empty and whitespace-only directories', () => {
+      for (const directory of ['', ' \t ']) {
+        const result = resolveOutputDirectory(WORKSPACE, directory);
+
+        expect(result).toMatchObject({ valid: false, error: { code: 'INVALID_PATH' } });
+      }
+    });
+
+    it('should reject directory paths containing a NUL byte', () => {
+      const result = resolveOutputDirectory(WORKSPACE, 'reports\u0000/daily');
+
+      expect(result).toMatchObject({ valid: false, error: { code: 'INVALID_PATH' } });
+    });
+
+    it('should reject an absolute POSIX directory path', () => {
+      const result = resolveOutputDirectory(WORKSPACE, '/tmp/devguard');
+
+      expect(result).toMatchObject({
+        valid: false,
+        error: { code: 'ABSOLUTE_PATH_NOT_ALLOWED' },
+      });
+    });
+
+    it('should reject an absolute Windows directory path', () => {
+      const result = resolveOutputDirectory(WORKSPACE, 'C:\\devguard\\reports');
+
+      expect(result).toMatchObject({
+        valid: false,
+        error: { code: 'ABSOLUTE_PATH_NOT_ALLOWED' },
+      });
+    });
+
+    it('should reject a UNC directory path', () => {
+      const result = resolveOutputDirectory(WORKSPACE, '\\\\server\\share\\reports');
+
+      expect(result).toMatchObject({
+        valid: false,
+        error: { code: 'ABSOLUTE_PATH_NOT_ALLOWED' },
+      });
+    });
+
+    it('should reject traversal and sibling-prefix paths outside the workspace', () => {
+      const traversal = resolveOutputDirectory(WORKSPACE, '../outside');
+      const siblingPrefix = resolveOutputDirectory(WORKSPACE, '../project-output/reports');
+
+      expect(traversal).toMatchObject({
+        valid: false,
+        error: { code: 'OUTPUT_PATH_OUTSIDE_DIRECTORY' },
+      });
+      expect(siblingPrefix).toMatchObject({
+        valid: false,
+        error: { code: 'OUTPUT_PATH_OUTSIDE_DIRECTORY' },
+      });
     });
   });
 

@@ -255,6 +255,57 @@ export async function resolveRuntimeFileWithinRoot(
 }
 
 /**
+ * Resolves a configured output directory relative to a workspace base and
+ * verifies that its lexical location remains inside that workspace.
+ * It does not inspect filesystem entries or resolve symlinks.
+ *
+ * @param workspaceBase - Absolute path to the workspace directory
+ * @param directory - Relative configured output directory
+ */
+export function resolveOutputDirectory(
+  workspaceBase: string,
+  directory: string,
+): PathResolutionResult {
+  if (!path.isAbsolute(workspaceBase) || workspaceBase.includes('\u0000')) {
+    return {
+      valid: false,
+      error: { code: 'INVALID_PATH', message: 'Workspace base must be an absolute valid path' },
+    };
+  }
+
+  if (directory.trim() === '' || directory.includes('\u0000')) {
+    return {
+      valid: false,
+      error: { code: 'INVALID_PATH', message: 'Output directory must be a non-empty valid path' },
+    };
+  }
+
+  if (isAbsolutePath(directory) || directory.startsWith('\\\\')) {
+    return {
+      valid: false,
+      error: {
+        code: 'ABSOLUTE_PATH_NOT_ALLOWED',
+        message: `Output directory must be relative to the workspace, got absolute path: "${directory}"`,
+      },
+    };
+  }
+
+  const resolved = path.resolve(workspaceBase, directory);
+
+  if (!isPathContainedInRoot(resolved, workspaceBase)) {
+    return {
+      valid: false,
+      error: {
+        code: 'OUTPUT_PATH_OUTSIDE_DIRECTORY',
+        message: `Output directory "${directory}" resolves outside workspace base "${workspaceBase}"`,
+      },
+    };
+  }
+
+  return { valid: true, resolvedPath: resolved };
+}
+
+/**
  * Resolves an output file path inside the output directory and verifies containment.
  * The filename must be relative and must not escape the output directory.
  *
