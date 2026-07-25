@@ -531,3 +531,52 @@ The current committed output-planning implementation includes only `resolveOutpu
 **Rationale:** A fixed two-report contract supports both developer-readable review artifacts and machine-readable automation without adding an unapproved format-selection surface. Separating pure lexical planning from later runtime filesystem checks keeps deterministic policy testable while ensuring symlink-aware containment is enforced before publication. Stable sanitized errors preserve useful operational boundaries without disclosing workspace paths, configuration values, or filesystem diagnostics.
 
 **Consequences:** Task 11.3 must implement the approved directory preparation, canonical containment, formatting, ordered atomic writes, partial-publication behavior, output-error taxonomy, and CLI directory override without changing planning precedence or display-path rules. It must retain both report outputs on every successful run and must not expose private path diagnostics. Task 11.4 may consume only the approved safe display paths when rendering its polished console summary.
+
+
+---
+
+## ADR-041 — CLI Requirements Override Semantics
+
+**Status:** ACCEPTED
+
+**Decision:** `--requirements <path>` is an explicit CLI override. A relative CLI requirements path resolves against the working directory captured once when the command executes. It is not resolved relative to the configuration file, `LoadedConfig.workspaceBase`, or a repository root. The CLI forwards the lexical path unchanged with that already captured working directory unchanged; neither CLI nor application code reads `process.cwd()` again.
+
+The structured internal override is:
+
+```ts
+{
+  path: string;
+  baseDirectory: string;
+  required: true;
+}
+```
+
+The path, base directory, and fatal semantics travel together to prevent accidental reinterpretation. The structured override will travel through the active production path: `runAnalyzeLocal`, `AnalyzeRepositoryInput`, `LocalRepositorySource.loadContext`, and `buildLocalRepositoryContext`. The generic `RepositorySource` abstraction remains unchanged and deferred; it is not part of this production transport path.
+
+`config.testing.requirementsFile` retains its existing behavior: it resolves relative to `LoadedConfig.workspaceBase`, must remain canonically contained in `workspaceBase`, and failures become recoverable requirements warnings. Source precedence is explicit CLI override, then configured `testing.requirementsFile`, then no requirements source. When an explicit override is present, its failure never falls back to the configured requirements file.
+
+Explicit override validation is fatal and aborts the whole analysis before analyzers, findings, test generation, scoring, report construction, and report publication. Explicit override failures never become warnings, findings, generated tests, score adjustments, or report content. Explicit paths must remain lexically and canonically contained within the captured working directory. Existing symlinks are allowed only when their canonical target remains inside that captured working directory.
+
+Accepted explicit input is an existing readable regular file that is valid strict UTF-8, non-empty after whitespace evaluation, no larger than 1 MiB, and canonically contained. The following explicit-override conditions are fatal: invalid or empty path; NUL in a path; missing or unreadable file; a directory or other non-regular file; lexical or sibling-prefix escape; symlink escape; invalid UTF-8; NUL content; oversized file; and empty or whitespace-only content.
+
+A new strict source-layer loader owns explicit override filesystem validation. The existing requirements-text loader remains unchanged and continues to own configured recoverable warning behavior. Commander remains thin and performs no requirements filesystem access. Configuration is loaded exactly once.
+
+The approved fatal error codes are:
+
+- `REQUIREMENTS_OVERRIDE_INVALID`
+- `REQUIREMENTS_OVERRIDE_NOT_FOUND`
+- `REQUIREMENTS_OVERRIDE_NOT_REGULAR_FILE`
+- `REQUIREMENTS_OVERRIDE_READ_FAILED`
+- `REQUIREMENTS_OVERRIDE_OUTSIDE_WORKING_DIRECTORY`
+- `REQUIREMENTS_OVERRIDE_SYMLINK_OUTSIDE_WORKING_DIRECTORY`
+- `REQUIREMENTS_OVERRIDE_FILE_TOO_LARGE`
+- `REQUIREMENTS_OVERRIDE_INVALID_UTF8`
+- `REQUIREMENTS_OVERRIDE_EMPTY`
+
+Fatal public messages are fixed and safe. They never contain user-supplied paths, absolute paths, base directories, symlink targets, errno, source content, parser diagnostics, private cause messages, or stacks. Private operational causes may be retained internally but are never printed.
+
+ADR-041 does not implement source loading, API transport, Commander option registration, verbose behavior, fail-below behavior, or final exit codes. ADR-042 remains reserved for final CLI outcomes and exit-code policy.
+
+**Rationale:** CLI-relative requirements are command inputs rather than configuration-relative data. Carrying the selected lexical path, its captured base directory, and fatal intent as one structured value preserves the caller's meaning and prevents configuration-relative fallback or accidental reinterpretation. A strict loader isolates fatal explicit-input semantics from the existing recoverable configured-file loader.
+
+**Consequences:** Future implementation must preserve one captured CLI working directory throughout explicit override transport, validate it before analysis work proceeds, and expose only fixed safe operational errors. Configured requirements loading remains recoverable and workspace-relative. CLI wiring and final error presentation require their separately approved Task 11.3 and ADR-042 work.
