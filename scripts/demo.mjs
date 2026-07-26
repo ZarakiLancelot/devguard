@@ -63,10 +63,18 @@ async function main() {
       return;
     }
 
+    if (mode === 'verify-thresholds') {
+      const result = await verifyThresholds(paths);
+      process.stdout.write(formatThresholdVerificationSuccess(result));
+      return;
+    }
+
     const result = await verifyBuiltAnalysis(paths);
     process.stdout.write(formatVerificationSuccess(result));
   } catch (error) {
-    if (mode === 'verify') {
+    if (mode === 'verify-thresholds') {
+      process.stderr.write('DevGuard Book demo threshold verification failed.\n');
+    } else if (mode === 'verify') {
       process.stderr.write('DevGuard Book demo verification failed.\n');
     } else {
       process.stderr.write('DevGuard Book demo setup failed.\n');
@@ -82,6 +90,10 @@ function parseMode(argumentsValue) {
 
   if (argumentsValue.length === 1 && argumentsValue[0] === '--verify') {
     return 'verify';
+  }
+
+  if (argumentsValue.length === 1 && argumentsValue[0] === '--verify-thresholds') {
+    return 'verify-thresholds';
   }
 
   throw new InvalidCommandError();
@@ -122,6 +134,7 @@ async function resolveDemoPaths() {
     generatedParent,
     workspaceRoot,
     repositoryRoot,
+    reportsDirectory: path.resolve(workspaceRoot, 'reports'),
     markdownReport: path.resolve(workspaceRoot, 'reports', 'book-library-report.md'),
     jsonReport: path.resolve(workspaceRoot, 'reports', 'book-library-report.json'),
   };
@@ -220,7 +233,7 @@ async function initializeRepository(repositoryRoot) {
 async function verifyBuiltAnalysis(paths) {
   await assertVerificationRegularFile(paths.builtCli, 'missing-built-cli');
 
-  const cliResult = await runBuiltCli(paths);
+  const cliResult = await runBuiltCli(paths, { verbose: true });
   if (cliResult.exitCode !== 0 || cliResult.signal !== null) {
     throw new VerificationError('cli-execution-failure');
   }
@@ -247,6 +260,193 @@ async function verifyBuiltAnalysis(paths) {
   return result;
 }
 
+async function verifyThresholds(paths) {
+  await assertVerificationRegularFile(paths.builtCli, 'missing-built-cli');
+  const manifest = await readExpectationManifest(paths.expectationManifest);
+  const thresholds = deriveVerifiedThresholds(manifest);
+  const cases = [
+    {
+      kind: 'pass',
+      threshold: thresholds.pass,
+      exitCode: 0,
+      stdout: 'DevGuard local analysis completed.\nReports published.\n',
+      stderr: '',
+    },
+    {
+      kind: 'equal',
+      threshold: thresholds.equal,
+      exitCode: 0,
+      stdout: 'DevGuard local analysis completed.\nReports published.\n',
+      stderr: '',
+    },
+    {
+      kind: 'fail',
+      threshold: thresholds.fail,
+      exitCode: 1,
+      stdout: '',
+      stderr: 'DevGuard quality threshold not met.\n',
+    },
+  ];
+  const projections = [];
+
+  for (const thresholdCase of cases) {
+    await clearGeneratedReports(paths);
+    const cliResult = await runBuiltCli(paths, { failBelow: thresholdCase.threshold });
+    verifyThresholdOutcome(cliResult, thresholdCase);
+
+    await assertVerificationRegularFile(paths.jsonReport, 'missing-json-report');
+    await assertVerificationRegularFile(paths.markdownReport, 'missing-markdown-report');
+
+    const report = await readJsonReport(paths.jsonReport);
+    const result = verifyReportStructure(report, manifest);
+    const markdown = await readReportText(paths.markdownReport, 'markdown-read-failure');
+    verifyMarkdownReport(markdown, result);
+    verifyPrivacy([JSON.stringify(report), markdown, cliResult.stdout, cliResult.stderr], paths);
+    verifyThresholdTerminalPrivacy(cliResult, paths, thresholdCase.threshold, result.healthScore);
+    projections.push(createStableProjection(result));
+  }
+
+  if (!projections.every((projection) => sameJson(projection, projections[0]))) {
+    throw new VerificationError('threshold-projection-mismatch');
+  }
+
+  await verifyRepositoryAfterAnalysis(paths);
+
+  return thresholds;
+}
+
+async function verifyRepositoryAfterAnalysis(paths) {
+  const baseCommit = await readGitValue(['rev-parse', 'demo-base^{commit}'], paths.repositoryRoot);
+  const parentCommit = await readGitValue(['rev-parse', 'HEAD^'], paths.repositoryRoot);
+  const mergeBase = await readGitValue(['merge-base', 'demo-base', 'HEAD'], paths.repositoryRoot);
+  const branch = await readGitValue(['symbolic-ref', '--short', 'HEAD'], paths.repositoryRoot);
+  const commitCount = await readGitValue(['rev-list', '--count', 'HEAD'], paths.repositoryRoot);
+  const status = await readGitValue(
+    ['status', '--porcelain=v1', '--untracked-files=all'],
+    paths.repositoryRoot,
+  );
+
+  if (
+    parentCommit !== baseCommit ||
+    mergeBase !== baseCommit ||
+    branch !== 'main' ||
+    commitCount !== '2' ||
+    status !== ''
+  ) {
+    throw new VerificationError('repository-state-mismatch');
+  }
+}
+
+function deriveVerifiedThresholds(manifest) {
+  if (requireString(manifest.status, 'manifest-status') !== 'verified') {
+    throw new VerificationError('manifest-not-verified');
+  }
+
+  const score = requireNumber(manifest.predictedHealthScore, 'manifest-health-score');
+  const pass = score - 1;
+  const equal = score;
+  const fail = score + 1;
+
+  if (
+    !Number.isFinite(score) ||
+    score < 0 ||
+    score > 100 ||
+    !isValidThreshold(pass) ||
+    !isValidThreshold(equal) ||
+    !isValidThreshold(fail)
+  ) {
+    throw new VerificationError('invalid-threshold-derivation');
+  }
+
+  return { pass, equal, fail };
+}
+
+function isValidThreshold(value) {
+  return Number.isFinite(value) && value >= 0 && value <= 100;
+}
+
+async function clearGeneratedReports(paths) {
+  if (!isStrictChild(paths.reportsDirectory, paths.workspaceRoot)) {
+    throw new VerificationError('report-directory-containment');
+  }
+
+  const existingDirectory = await lstatOrUndefined(paths.reportsDirectory);
+  if (existingDirectory !== undefined) {
+    if (!existingDirectory.isDirectory() || existingDirectory.isSymbolicLink()) {
+      throw new VerificationError('report-directory-invalid');
+    }
+
+    const realReportsDirectory = await realpath(paths.reportsDirectory);
+    if (!isStrictChild(realReportsDirectory, paths.workspaceRoot)) {
+      throw new VerificationError('report-directory-containment');
+    }
+
+    await rm(paths.reportsDirectory, { force: true, recursive: true });
+  }
+
+  if (
+    (await lstatOrUndefined(paths.markdownReport)) !== undefined ||
+    (await lstatOrUndefined(paths.jsonReport)) !== undefined
+  ) {
+    throw new VerificationError('reports-not-cleared');
+  }
+}
+
+function verifyThresholdOutcome(cliResult, thresholdCase) {
+  if (
+    cliResult.exitCode !== thresholdCase.exitCode ||
+    cliResult.signal !== null ||
+    cliResult.stdout !== thresholdCase.stdout ||
+    cliResult.stderr !== thresholdCase.stderr
+  ) {
+    throw new VerificationError('threshold-outcome-mismatch');
+  }
+}
+
+function verifyThresholdTerminalPrivacy(cliResult, paths, threshold, score) {
+  const terminalOutput = `${cliResult.stdout}${cliResult.stderr}`;
+  const forbiddenValues = [
+    paths.projectRoot,
+    paths.workspaceRoot,
+    paths.repositoryRoot,
+    paths.templateConfiguration,
+    process.env.HOME,
+    process.env.USER,
+    process.env.LOGNAME,
+    String(threshold),
+    String(score),
+  ].filter((value) => typeof value === 'string' && value.length > 0);
+
+  if (
+    forbiddenValues.some((value) => terminalOutput.includes(value)) ||
+    terminalOutput.includes('/home/') ||
+    /(?:stack trace|error:\s)/iu.test(terminalOutput)
+  ) {
+    throw new VerificationError('threshold-terminal-privacy-violation');
+  }
+}
+
+function createStableProjection(result) {
+  return {
+    findings: result.findingProjection,
+    scenarios: result.scenarioProjection,
+    healthScore: result.healthScore,
+    healthLabel: result.healthLabel,
+  };
+}
+
+function formatThresholdVerificationSuccess(thresholds) {
+  return (
+    [
+      'DevGuard Book demo thresholds verified.',
+      `Pass threshold: ${thresholds.pass} -> exit 0`,
+      `Equal threshold: ${thresholds.equal} -> exit 0`,
+      `Fail threshold: ${thresholds.fail} -> exit 1`,
+      'Reports published after threshold failure.',
+    ].join('\n') + '\n'
+  );
+}
+
 function formatVerificationSuccess(result) {
   return (
     [
@@ -260,17 +460,20 @@ function formatVerificationSuccess(result) {
   );
 }
 
-async function runBuiltCli(paths) {
+async function runBuiltCli(paths, options = {}) {
+  const argumentsValue = [
+    paths.builtCli,
+    'analyze',
+    'local',
+    '--config',
+    'demo/.work/book-library/.devguard.yml',
+    ...(options.failBelow === undefined ? [] : ['--fail-below', String(options.failBelow)]),
+    ...(options.verbose === true ? ['--verbose'] : []),
+  ];
+
   return runProcess(
     process.execPath,
-    [
-      paths.builtCli,
-      'analyze',
-      'local',
-      '--config',
-      'demo/.work/book-library/.devguard.yml',
-      '--verbose',
-    ],
+    argumentsValue,
     paths.projectRoot,
     CLI_TIMEOUT_MS,
     CLI_TERMINATION_GRACE_MS,
