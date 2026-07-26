@@ -580,3 +580,103 @@ ADR-041 does not implement source loading, API transport, Commander option regis
 **Rationale:** CLI-relative requirements are command inputs rather than configuration-relative data. Carrying the selected lexical path, its captured base directory, and fatal intent as one structured value preserves the caller's meaning and prevents configuration-relative fallback or accidental reinterpretation. A strict loader isolates fatal explicit-input semantics from the existing recoverable configured-file loader.
 
 **Consequences:** Future implementation must preserve one captured CLI working directory throughout explicit override transport, validate it before analysis work proceeds, and expose only fixed safe operational errors. Configured requirements loading remains recoverable and workspace-relative. CLI wiring and final error presentation require their separately approved Task 11.3 and ADR-042 work.
+
+
+---
+
+## ADR-042 — Final CLI Outcomes, Quality Thresholds, and Exit Codes
+
+**Status:** ACCEPTED
+
+**Context:** ADR-039 established Commander isolation, safe CLI-owned error rendering, and a provisional generic failure code. ADR-040 requires every successful analysis output to publish both Markdown and JSON reports. ADR-041 defines fatal explicit-requirements behavior.
+
+Automation must distinguish successful completion; completed analysis and publication whose score does not meet policy; invalid CLI usage; known operational inability to complete; and unknown internal failure. The deterministic score is already available as `AnalyzeRepositoryResult.report.healthScore`. Runtime-generated scores are integers from 0 through 100 inclusive, with higher scores being better. The CLI must read that existing score and must never recalculate it.
+
+**Decision:** DevGuard will add the optional CLI option `--fail-below <score>`. When the option is absent, no quality threshold applies: successful analysis and publication remain exit code `0`.
+
+After trimming outer whitespace, a valid threshold uses this lexical grammar:
+
+```txt
+digits [ "." digits ]
+```
+
+Accepted examples are `0`, `80`, `80.5`, `100`, and `" 75.25 "`. The following inputs are rejected: empty or whitespace-only input; signed values such as `+80` or `-1`; `NaN`; `Infinity` or `-Infinity`; exponent notation such as `1e2`; hexadecimal, binary, or octal notation; malformed decimals; and values below `0` or above `100`. Decimals are allowed even though runtime scores are integers.
+
+Threshold comparison is exactly:
+
+```ts
+healthScore < threshold
+```
+
+Equality passes. Thus score `80` passes threshold `80`; score `80` fails threshold `80.5`; score `100` passes threshold `100`; and score `0` passes threshold `0`.
+
+Invalid threshold syntax or range is a CLI usage failure. It must stop before working-directory capture, analysis, publication, or threshold evaluation.
+
+The required execution order is:
+
+```txt
+working-directory capture
+→ analyze exactly once
+→ publish Markdown and JSON exactly once
+→ evaluate threshold using the existing healthScore
+→ select final CLI outcome
+```
+
+Threshold evaluation occurs only after publication succeeds. A threshold miss does not prevent publication, is not an operational error, does not rerun analysis, does not recalculate the score, and does not rerun publication. A publication failure prevents threshold evaluation.
+
+The stable exit-code taxonomy is:
+
+| Exit code | Outcome |
+| --- | --- |
+| `0` | Successful analysis and publication; threshold absent or met |
+| `1` | Analysis and publication succeeded, but `healthScore` is below threshold |
+| `2` | Operational failure, including known typed DevGuard failures and unknown internal failures |
+| `3` | Invalid CLI usage or Commander syntax failure |
+
+Help remains exit code `0`, and version remains exit code `0`. Commander syntax failures, unknown options, unknown commands, missing required options, missing option values, and invalid `--fail-below` input map to `3`; they remain Commander-owned and are not sent through `presentCliError`. Recognized `ConfigLoadError`, `ExplicitRequirementsOverrideError`, Git, source/context, analysis, and output errors map to `2` after their existing fixed safe presentation. An unrecognized thrown value uses the fixed generic `INTERNAL_ERROR` presentation and also maps to `2`. Threshold misses map to `1`.
+
+No production code calls `process.exit`; the executable `main` function remains the only place assigning `process.exitCode`. DevGuard does not define separate exit codes for every typed operational error.
+
+For a threshold miss, DevGuard does not print the normal completion line. It writes exactly this fixed safe stderr line:
+
+```txt
+DevGuard quality threshold not met.
+```
+
+This task does not expose the threshold, actual score, configuration, workspace, repository paths, report contents, or private causes. Detailed score and safe output-path presentation remain reserved for the later verbose/polished-summary task.
+
+Lexical threshold parsing belongs to a small pure CLI helper. Invalid parsing must enter Commander-owned usage flow. `runAnalyzeLocal` remains independent of Commander types; application and score-calculator modules remain unchanged. Threshold evaluation reads the existing score and does not calculate it.
+
+`runAnalyzeLocal` may transition from returning the complete `AnalyzeRepositoryResult` to this minimal CLI-owned completion type:
+
+```ts
+interface LocalAnalysisCompletion {
+  healthScore: number;
+}
+```
+
+Threshold evaluation needs only `healthScore`; `LoadedConfig` and full report contents must not cross the CLI adapter boundary unnecessarily. Safe output paths may be added later for Task 11.4 without changing threshold semantics or exit codes. Operational failures remain rejected values handled at the safe CLI boundary.
+
+CLI outcomes must never expose `LoadedConfig`; `workspaceBase`; repository paths; source contents; report contents; requirement contents or canonical paths; output canonical paths; temporary filenames; errno; stacks; private causes; or arbitrary error messages. All operational, internal, and threshold failure messages must be CLI-owned fixed text.
+
+**Rejected alternatives:**
+
+1. Evaluate the threshold before publication. Rejected because quality failures must retain report artifacts.
+2. Recalculate score in the CLI. Rejected because it duplicates deterministic domain logic.
+3. Treat a threshold miss as an operational error. Rejected because analysis and publication completed successfully.
+4. Use one exit code for every failure. Rejected because CI must distinguish quality, unavailable analysis, and usage outcomes.
+5. Use sysexits-inspired exit codes. Rejected for the MVP: `64` for usage and `70` for internal software failure are valid Unix conventions, but were not previously approved, increase the public exit-code surface, and are less immediately understandable without external convention knowledge. Sequential Model C fully satisfies current CI and CLI requirements.
+6. Use separate known-operational and internal-failure exit codes. Rejected because both prevent successful analysis completion while their existing fixed safe messages already distinguish the category.
+7. Parse `--fail-below` in application or scoring modules. Rejected because lexical option policy belongs to the CLI.
+8. Continue returning the complete `AnalyzeRepositoryResult` indefinitely. Rejected because it carries private composition state beyond what the CLI outcome requires.
+9. Include publication paths in the minimal threshold completion type now. Rejected and deferred because Task 11.4 owns polished output presentation.
+
+**Consequences:** CI receives four compact outcomes: `0`, `1`, `2`, and `3`. Quality gate failures are distinct from unavailable analysis, and reports remain available on threshold misses. Known operational failures and unknown internal failures share code `2`, while their fixed safe messages still distinguish the diagnostic category. Commander usage failures change from the current provisional code `1` to stable code `3`; no existing documented final numeric contract is being broken. Tests must prove single analysis and publication, post-publication evaluation, stable exit mappings, safe diagnostics, and absence of private-data exposure. Verbose and polished-summary behavior must not change these semantics.
+
+The approved implementation slices are:
+
+1. ADR-042.
+2. Pure `--fail-below` parser and evaluator.
+3. Commander wiring and minimal completion transport.
+4. Final exit-code and CLI outcome integration.
+5. Verbose and polished summary later.
