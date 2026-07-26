@@ -24,3 +24,6 @@ kiro-session-before-rename.json
 
 # Generated Book demo workspace
 demo/.work/
+
+# Generated package verification workspace
+.tmp/package-verification/

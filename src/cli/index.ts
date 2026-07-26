@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
-import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { realpathSync } from 'node:fs';
+import { normalize, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { CommanderError } from 'commander';
 import { CliHandledFailure } from './cli-error-presenter.js';
 import {
@@ -51,9 +52,27 @@ export async function main(
   }
 }
 
-function isDirectExecution(): boolean {
-  const entryPath = process.argv[1];
-  return entryPath !== undefined && pathToFileURL(resolve(entryPath)).href === import.meta.url;
+export function isDirectExecution(
+  entryPath: string | undefined = process.argv[1],
+  moduleUrl: string = import.meta.url,
+  canonicalize: (filePath: string) => string = realpathSync,
+): boolean {
+  if (entryPath === undefined) {
+    return false;
+  }
+
+  try {
+    const canonicalEntryPath = normalizeForComparison(canonicalize(resolve(entryPath)));
+    const canonicalModulePath = normalizeForComparison(canonicalize(fileURLToPath(moduleUrl)));
+    return canonicalEntryPath === canonicalModulePath;
+  } catch {
+    return false;
+  }
+}
+
+function normalizeForComparison(filePath: string): string {
+  const normalized = normalize(filePath);
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
 }
 
 if (isDirectExecution()) {

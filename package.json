@@ -16,6 +16,7 @@
     "build": "pnpm run build:prod",
     "build:prod": "node scripts/build-production.mjs",
     "prepack": "node scripts/build-production.mjs",
+    "verify:package": "node scripts/verify-package.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src/",

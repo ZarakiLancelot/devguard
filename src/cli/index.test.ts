@@ -1,3 +1,5 @@
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { Command, CommanderError } from 'commander';
 import { describe, expect, it, vi } from 'vitest';
 import { CliHandledFailure } from './cli-error-presenter.js';
@@ -8,7 +10,7 @@ import {
   CLI_EXIT_USAGE_ERROR,
 } from './exit-codes.js';
 import { evaluateFailBelow as evaluateFailBelowPure } from './fail-below.js';
-import { main, runCli } from './index.js';
+import { isDirectExecution, main, runCli } from './index.js';
 import { createProgram, type CliDependencies } from './program.js';
 import { QualityThresholdFailure } from './quality-threshold-failure.js';
 import {
@@ -380,6 +382,53 @@ describe('missing local configuration option', () => {
       log.mockRestore();
       error.mockRestore();
     }
+  });
+});
+
+describe('isDirectExecution', () => {
+  const directEntryPath = path.resolve('compiled-entry.js');
+  const directModuleUrl = pathToFileURL(directEntryPath).href;
+
+  it('recognizes the direct compiled entrypoint after canonicalization', () => {
+    expect(isDirectExecution(directEntryPath, directModuleUrl, (candidate) => candidate)).toBe(
+      true,
+    );
+  });
+
+  it('recognizes a symlinked argv entrypoint when its canonical path matches the module', () => {
+    const symlinkedEntryPath = path.resolve(
+      'consumer',
+      'node_modules',
+      '@scope',
+      'devguard',
+      'index.js',
+    );
+    const canonicalEntryPath = path.resolve('store', 'devguard', 'index.js');
+    const moduleUrl = pathToFileURL(canonicalEntryPath).href;
+
+    expect(
+      isDirectExecution(symlinkedEntryPath, moduleUrl, (candidate) =>
+        candidate === symlinkedEntryPath ? canonicalEntryPath : candidate,
+      ),
+    ).toBe(true);
+  });
+
+  it('does not run for a different importing module path', () => {
+    const importerPath = path.resolve('importer.js');
+
+    expect(isDirectExecution(importerPath, directModuleUrl, (candidate) => candidate)).toBe(false);
+  });
+
+  it('does not run when argv has no entrypoint', () => {
+    expect(isDirectExecution(undefined, directModuleUrl, (candidate) => candidate)).toBe(false);
+  });
+
+  it('does not run when canonical filesystem resolution fails', () => {
+    expect(
+      isDirectExecution(directEntryPath, directModuleUrl, () => {
+        throw new Error('resolution failed');
+      }),
+    ).toBe(false);
   });
 });
 
