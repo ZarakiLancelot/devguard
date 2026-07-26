@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { CliHandledFailure } from './cli-error-presenter.js';
+import { evaluateFailBelow as evaluateFailBelowPure } from './fail-below.js';
 import { runCli } from './index.js';
 import { createProgram, type CliDependencies } from './program.js';
+import { QualityThresholdFailure } from './quality-threshold-failure.js';
 import {
   AnalyzeRepositoryError,
   type AnalyzeRepositoryResult,
@@ -19,6 +21,7 @@ const WORKING_DIRECTORY = '/caller/working-directory';
 interface CliHarness {
   analyzeRepository: ReturnType<typeof vi.fn>;
   publishAnalysisResult: ReturnType<typeof vi.fn>;
+  evaluateFailBelow: ReturnType<typeof vi.fn>;
   getWorkingDirectory: ReturnType<typeof vi.fn>;
   stdout: string[];
   stderr: string[];
@@ -30,12 +33,14 @@ function createHarness(): CliHarness {
     report: { healthScore: 100 },
   } as AnalyzeRepositoryResult);
   const publishAnalysisResult = vi.fn().mockResolvedValue({});
+  const evaluateFailBelow = vi.fn(evaluateFailBelowPure);
   const getWorkingDirectory = vi.fn(() => WORKING_DIRECTORY);
   const stdout: string[] = [];
   const stderr: string[] = [];
   const dependencies = {
     analyzeRepository,
     publishAnalysisResult,
+    evaluateFailBelow,
     getWorkingDirectory,
     writeStdout: (text: string): void => {
       stdout.push(text);
@@ -48,6 +53,7 @@ function createHarness(): CliHarness {
   return {
     analyzeRepository,
     publishAnalysisResult,
+    evaluateFailBelow,
     getWorkingDirectory,
     stdout,
     stderr,
@@ -80,11 +86,15 @@ describe('DevGuard CLI', () => {
     expect(local).toBeDefined();
     expect(configOption?.required).toBe(true);
     expect(requirementsOption).toBeDefined();
-    expect(local?.options.some((candidate) => candidate.long === '--output')).toBe(true);
-    for (const option of ['--verbose', '--fail-below']) {
+    expect(local?.options.map((option) => option.long)).toEqual([
+      '--config',
+      '--requirements',
+      '--output',
+      '--fail-below',
+    ]);
+    for (const option of ['--verbose', '--format']) {
       expect(local?.options.some((candidate) => candidate.long === option)).toBe(false);
     }
-    expect(local?.options.some((candidate) => candidate.long === '--format')).toBe(false);
   });
 
   it('maps the exact lexical requirements option through one analysis using one working-directory capture', async () => {
@@ -321,6 +331,7 @@ describe('DevGuard CLI', () => {
     ).rejects.toMatchObject({ code: 'commander.unknownOption' });
 
     expect(harness.analyzeRepository).not.toHaveBeenCalled();
+    expect(harness.evaluateFailBelow).not.toHaveBeenCalled();
     expect(harness.stderr.join('')).not.toContain('DevGuard error [');
     expect(harness.stderr.join('')).toContain('error:');
   });
@@ -402,5 +413,240 @@ describe('runCli', () => {
     expect(syntaxHarness.analyzeRepository).not.toHaveBeenCalled();
     expect(syntaxHarness.stderr.join('')).toContain('error:');
     expect(syntaxHarness.stderr.join('')).not.toContain('DevGuard error [');
+  });
+});
+
+describe('provisional threshold outer behavior', () => {
+  it('keeps the threshold signal on the generic outer fallback until exit-code integration', async () => {
+    const harness = createHarness();
+    harness.analyzeRepository.mockResolvedValue({
+      report: { healthScore: 79 },
+    } as AnalyzeRepositoryResult);
+
+    const exitCode = await runCli(
+      ['node', 'devguard', 'analyze', 'local', '--config', 'config.yml', '--fail-below', '80'],
+      harness.dependencies,
+    );
+
+    expect(exitCode).toBe(1);
+    expect(harness.stdout).toEqual([]);
+    expect(harness.stderr).toEqual(['DevGuard quality threshold not met.\n']);
+  });
+});
+
+describe('fail-below Commander wiring', () => {
+  it('does not evaluate a threshold when the option is absent and prints the existing completion line', async () => {
+    const harness = createHarness();
+
+    await createProgram(harness.dependencies).parseAsync(
+      ['analyze', 'local', '--config', 'config.yml'],
+      { from: 'user' },
+    );
+
+    expect(harness.analyzeRepository).toHaveBeenCalledTimes(1);
+    expect(harness.publishAnalysisResult).toHaveBeenCalledTimes(1);
+    expect(harness.evaluateFailBelow).not.toHaveBeenCalled();
+    expect(harness.stdout).toEqual(['DevGuard local analysis completed.\n']);
+    expect(harness.stderr).toEqual([]);
+  });
+
+  it.each([
+    ['80', 80, 80],
+    ['80.5', 80.5, 81],
+    [' 75.25 ', 75.25, 80],
+  ])(
+    'parses %j once and evaluates the exact parsed threshold after completion',
+    async (value, threshold, healthScore) => {
+      const harness = createHarness();
+      harness.analyzeRepository.mockResolvedValue({
+        report: { healthScore },
+      } as AnalyzeRepositoryResult);
+
+      const program = createProgram(harness.dependencies);
+      await program.parseAsync(
+        ['analyze', 'local', '--config', 'config.yml', '--fail-below', value],
+        { from: 'user' },
+      );
+      const analyze = program.commands.find((command) => command.name() === 'analyze');
+      const local = analyze?.commands.find((command) => command.name() === 'local');
+
+      expect(harness.analyzeRepository).toHaveBeenCalledTimes(1);
+      expect(harness.publishAnalysisResult).toHaveBeenCalledTimes(1);
+      expect(harness.evaluateFailBelow).toHaveBeenCalledTimes(1);
+      expect(harness.evaluateFailBelow).toHaveBeenCalledWith(healthScore, { threshold });
+      expect(harness.evaluateFailBelow.mock.calls[0]?.[1]).toBe(local?.opts().failBelow);
+      expect(harness.stdout).toEqual(['DevGuard local analysis completed.\n']);
+      expect(harness.stderr).toEqual([]);
+    },
+  );
+
+  it('evaluates only after deferred publication has completed', async () => {
+    const harness = createHarness();
+    let resolvePublication!: (value: object) => void;
+    const publication = new Promise<object>((resolve) => {
+      resolvePublication = resolve;
+    });
+    harness.analyzeRepository.mockResolvedValue({
+      report: { healthScore: 80 },
+    } as AnalyzeRepositoryResult);
+    harness.publishAnalysisResult.mockReturnValue(publication);
+
+    const parsing = createProgram(harness.dependencies).parseAsync(
+      ['analyze', 'local', '--config', 'config.yml', '--fail-below', '80'],
+      { from: 'user' },
+    );
+
+    await Promise.resolve();
+    expect(harness.publishAnalysisResult).toHaveBeenCalledTimes(1);
+    expect(harness.evaluateFailBelow).not.toHaveBeenCalled();
+    expect(harness.stdout).toEqual([]);
+
+    resolvePublication({});
+    await parsing;
+
+    expect(harness.evaluateFailBelow).toHaveBeenCalledTimes(1);
+    expect(harness.stdout).toEqual(['DevGuard local analysis completed.\n']);
+  });
+
+  it('renders only the fixed threshold diagnostic and rethrows the nominal quality signal on a miss', async () => {
+    const harness = createHarness();
+    const privateConfigPath = 'private-config-sentinel';
+    harness.analyzeRepository.mockResolvedValue({
+      report: { healthScore: 79 },
+    } as AnalyzeRepositoryResult);
+
+    let thrown: unknown;
+    try {
+      await createProgram(harness.dependencies).parseAsync(
+        ['analyze', 'local', '--config', privateConfigPath, '--fail-below', '80'],
+        { from: 'user' },
+      );
+    } catch (error: unknown) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(QualityThresholdFailure);
+    expect(harness.analyzeRepository).toHaveBeenCalledTimes(1);
+    expect(harness.publishAnalysisResult).toHaveBeenCalledTimes(1);
+    expect(harness.evaluateFailBelow).toHaveBeenCalledTimes(1);
+    expect(harness.stdout).toEqual([]);
+    expect(harness.stderr).toEqual(['DevGuard quality threshold not met.\n']);
+    expect(harness.stderr.join('')).not.toContain('INTERNAL_ERROR');
+    expect(harness.stderr.join('')).not.toContain(privateConfigPath);
+    expect(harness.stderr.join('')).not.toContain('79');
+    expect(harness.stderr.join('')).not.toContain('80');
+  });
+
+  it.each([
+    '',
+    '   ',
+    '.5',
+    '80.',
+    '+80',
+    '-1',
+    'NaN',
+    'Infinity',
+    '-Infinity',
+    '1e2',
+    '0x50',
+    '0b1010',
+    '0o100',
+    '80,5',
+    '1_000',
+    '80.5.1',
+    'alphabetic-sentinel',
+    '100.001',
+    '101',
+  ])(
+    'keeps invalid fail-below value %j in Commander usage flow without action work or leakage',
+    async (value) => {
+      const harness = createHarness();
+      const exit = vi.spyOn(process, 'exit');
+      const log = vi.spyOn(console, 'log');
+      const warn = vi.spyOn(console, 'warn');
+      const error = vi.spyOn(console, 'error');
+
+      try {
+        await expect(
+          createProgram(harness.dependencies).parseAsync(
+            ['analyze', 'local', '--config', 'config.yml', '--fail-below', value],
+            { from: 'user' },
+          ),
+        ).rejects.toMatchObject({ code: 'commander.invalidArgument' });
+        expect(harness.getWorkingDirectory).not.toHaveBeenCalled();
+        expect(harness.analyzeRepository).not.toHaveBeenCalled();
+        expect(harness.publishAnalysisResult).not.toHaveBeenCalled();
+        expect(harness.evaluateFailBelow).not.toHaveBeenCalled();
+        expect(harness.stdout).toEqual([]);
+        expect(harness.stderr.join('')).toContain(
+          'Fail-below score must be a decimal value from 0 through 100.',
+        );
+        expect(harness.stderr.join('')).not.toContain('DevGuard quality threshold not met.');
+        expect(harness.stderr.join('')).not.toContain('DevGuard error [');
+        if (value.length > 1) {
+          expect(harness.stderr.join('')).not.toContain(value);
+        }
+        expect(exit).not.toHaveBeenCalled();
+        expect(log).not.toHaveBeenCalled();
+        expect(warn).not.toHaveBeenCalled();
+        expect(error).not.toHaveBeenCalled();
+      } finally {
+        exit.mockRestore();
+        log.mockRestore();
+        warn.mockRestore();
+        error.mockRestore();
+      }
+    },
+  );
+
+  it('keeps a missing fail-below value in Commander syntax flow without action work', async () => {
+    const harness = createHarness();
+
+    await expect(
+      createProgram(harness.dependencies).parseAsync(
+        ['analyze', 'local', '--config', 'config.yml', '--fail-below'],
+        { from: 'user' },
+      ),
+    ).rejects.toMatchObject({ code: 'commander.optionMissingArgument' });
+    expect(harness.getWorkingDirectory).not.toHaveBeenCalled();
+    expect(harness.analyzeRepository).not.toHaveBeenCalled();
+    expect(harness.publishAnalysisResult).not.toHaveBeenCalled();
+    expect(harness.evaluateFailBelow).not.toHaveBeenCalled();
+    expect(harness.stdout).toEqual([]);
+    expect(harness.stderr.join('')).not.toContain('DevGuard error [');
+  });
+
+  it('prevents threshold evaluation and success output after analysis or publication failure', async () => {
+    const analysisHarness = createHarness();
+    const analysisFailure = new Error('private analysis failure');
+    analysisHarness.analyzeRepository.mockRejectedValue(analysisFailure);
+
+    await expect(
+      createProgram(analysisHarness.dependencies).parseAsync(
+        ['analyze', 'local', '--config', 'config.yml', '--fail-below', '80'],
+        { from: 'user' },
+      ),
+    ).rejects.toBeInstanceOf(CliHandledFailure);
+    expect(analysisHarness.evaluateFailBelow).not.toHaveBeenCalled();
+    expect(analysisHarness.stdout).toEqual([]);
+    expect(analysisHarness.stderr).toEqual([
+      'DevGuard error [INTERNAL_ERROR]: Analysis could not be completed.\n',
+    ]);
+
+    const publicationHarness = createHarness();
+    const publicationFailure = new Error('private publication failure');
+    publicationHarness.publishAnalysisResult.mockRejectedValue(publicationFailure);
+
+    await expect(
+      createProgram(publicationHarness.dependencies).parseAsync(
+        ['analyze', 'local', '--config', 'config.yml', '--fail-below', '80'],
+        { from: 'user' },
+      ),
+    ).rejects.toBeInstanceOf(CliHandledFailure);
+    expect(publicationHarness.evaluateFailBelow).not.toHaveBeenCalled();
+    expect(publicationHarness.stdout).toEqual([]);
+    expect(publicationHarness.stderr).toEqual([
+      'DevGuard error [INTERNAL_ERROR]: Analysis could not be completed.\n',
+    ]);
   });
 });
