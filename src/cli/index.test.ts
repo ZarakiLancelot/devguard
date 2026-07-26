@@ -26,7 +26,9 @@ interface CliHarness {
 }
 
 function createHarness(): CliHarness {
-  const analyzeRepository = vi.fn().mockResolvedValue({} as AnalyzeRepositoryResult);
+  const analyzeRepository = vi.fn().mockResolvedValue({
+    report: { healthScore: 100 },
+  } as AnalyzeRepositoryResult);
   const publishAnalysisResult = vi.fn().mockResolvedValue({});
   const getWorkingDirectory = vi.fn(() => WORKING_DIRECTORY);
   const stdout: string[] = [];

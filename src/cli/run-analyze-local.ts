@@ -1,8 +1,9 @@
-import type {
-  analyzeRepository,
-  AnalyzeRepositoryResult,
-} from '../application/analyze-repository.js';
+import type { analyzeRepository } from '../application/analyze-repository.js';
 import type { publishAnalysisResult } from '../application/publish-analysis-result.js';
+
+export interface LocalAnalysisCompletion {
+  healthScore: number;
+}
 
 export interface RunAnalyzeLocalInput {
   configPath: string;
@@ -23,7 +24,7 @@ export interface RunAnalyzeLocalDependencies {
 export async function runAnalyzeLocal(
   input: RunAnalyzeLocalInput,
   dependencies: RunAnalyzeLocalDependencies,
-): Promise<AnalyzeRepositoryResult> {
+): Promise<LocalAnalysisCompletion> {
   const workingDirectory = dependencies.getWorkingDirectory();
 
   const result = await dependencies.analyzeRepository({
@@ -47,5 +48,5 @@ export async function runAnalyzeLocal(
       : { outputDirectoryOverride: input.outputDirectoryPath }),
   });
 
-  return result;
+  return { healthScore: result.report.healthScore };
 }

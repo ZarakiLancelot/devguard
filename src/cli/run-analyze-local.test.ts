@@ -10,11 +10,59 @@ const ANALYSIS_OUTPUT_SUMMARY = {
 const LEXICAL_CONFIG_PATH = ' ./selected config/.devguard.yml ';
 const WORKING_DIRECTORY = '/caller/working-directory';
 
+interface Deferred<Value> {
+  promise: Promise<Value>;
+  resolve: (value: Value) => void;
+}
+
+function createDeferred<Value>(): Deferred<Value> {
+  let resolvePromise!: (value: Value) => void;
+  const promise = new Promise<Value>((resolve) => {
+    resolvePromise = resolve;
+  });
+
+  return {
+    promise,
+    resolve: (value) => resolvePromise(value),
+  };
+}
+
+function createResult(healthScore: number): AnalyzeRepositoryResult {
+  return {
+    loadedConfig: {} as AnalyzeRepositoryResult['loadedConfig'],
+    report: { healthScore } as AnalyzeRepositoryResult['report'],
+  };
+}
+
 describe('runAnalyzeLocal', () => {
-  it('forwards the exact lexical config path and one injected working directory once', async () => {
-    const result = {} as AnalyzeRepositoryResult;
-    const analyzeRepository = vi.fn().mockResolvedValue(result);
-    const publishAnalysisResult = vi.fn().mockResolvedValue(ANALYSIS_OUTPUT_SUMMARY);
+  it('awaits publication of the exact result before returning only its report health score', async () => {
+    const expectedScore = 80.5;
+    const publication = createDeferred<typeof ANALYSIS_OUTPUT_SUMMARY>();
+    const calls: string[] = [];
+    let healthScoreReads = 0;
+    const report = Object.freeze(
+      Object.defineProperty({}, 'healthScore', {
+        enumerable: true,
+        get: () => {
+          healthScoreReads += 1;
+          calls.push('healthScore');
+          return expectedScore;
+        },
+      }),
+    ) as AnalyzeRepositoryResult['report'];
+    const result = Object.freeze({
+      loadedConfig: {} as AnalyzeRepositoryResult['loadedConfig'],
+      report,
+    }) as AnalyzeRepositoryResult;
+    const analyzeRepository = vi.fn(async () => {
+      calls.push('analyze');
+      return result;
+    });
+    const publishAnalysisResult = vi.fn(async (input: { result: AnalyzeRepositoryResult }) => {
+      calls.push('publish');
+      expect(input.result).toBe(result);
+      return publication.promise;
+    });
     const getWorkingDirectory = vi.fn(() => WORKING_DIRECTORY);
     const input = { configPath: LEXICAL_CONFIG_PATH };
     const beforeInput = structuredClone(input);
@@ -23,51 +71,86 @@ describe('runAnalyzeLocal', () => {
       publishAnalysisResult,
       getWorkingDirectory,
     });
+    const log = vi.spyOn(console, 'log');
+    const warn = vi.spyOn(console, 'warn');
+    const error = vi.spyOn(console, 'error');
+    const stdout = vi.spyOn(process.stdout, 'write');
+    const stderr = vi.spyOn(process.stderr, 'write');
+    const workingDirectory = vi.spyOn(process, 'cwd');
 
-    const actual = await runAnalyzeLocal(input, dependencies);
+    try {
+      const completionPromise = runAnalyzeLocal(input, dependencies);
+      let settled = false;
+      void completionPromise.then(() => {
+        settled = true;
+      });
 
-    expect(getWorkingDirectory).toHaveBeenCalledTimes(1);
-    expect(analyzeRepository).toHaveBeenCalledTimes(1);
-    expect(publishAnalysisResult).toHaveBeenCalledTimes(1);
-    expect(publishAnalysisResult).toHaveBeenCalledWith({ result });
-    expect(publishAnalysisResult.mock.calls[0]?.[0]?.result).toBe(result);
-    const analysisInput = analyzeRepository.mock.calls[0]?.[0];
-    expect(analysisInput).toEqual({
-      configPath: LEXICAL_CONFIG_PATH,
-      workingDirectory: WORKING_DIRECTORY,
-    });
-    expect(analysisInput).not.toHaveProperty('requirementsPath');
-    expect(analysisInput).not.toHaveProperty('outputDirectory');
-    expect(analysisInput).not.toHaveProperty('verbose');
-    expect(analysisInput).not.toHaveProperty('failBelow');
-    expect(analysisInput).not.toHaveProperty('format');
-    expect(actual).toBe(result);
-    expect(input).toEqual(beforeInput);
-    expect(Object.keys(dependencies)).toEqual([
-      'analyzeRepository',
-      'publishAnalysisResult',
-      'getWorkingDirectory',
-    ]);
+      await Promise.resolve();
+      expect(calls).toEqual(['analyze', 'publish']);
+      expect(settled).toBe(false);
+      expect(healthScoreReads).toBe(0);
+      expect(getWorkingDirectory).toHaveBeenCalledTimes(1);
+      expect(analyzeRepository).toHaveBeenCalledWith({
+        configPath: LEXICAL_CONFIG_PATH,
+        workingDirectory: WORKING_DIRECTORY,
+      });
+      expect(publishAnalysisResult).toHaveBeenCalledTimes(1);
+      expect(publishAnalysisResult.mock.calls[0]?.[0]?.result).toBe(result);
+
+      publication.resolve(ANALYSIS_OUTPUT_SUMMARY);
+      const completion = await completionPromise;
+
+      expect(completion).toEqual({ healthScore: expectedScore });
+      expect(Object.keys(completion)).toEqual(['healthScore']);
+      expect(completion).not.toBe(ANALYSIS_OUTPUT_SUMMARY);
+      expect(completion).not.toHaveProperty('markdownPath');
+      expect(completion).not.toHaveProperty('jsonPath');
+      expect(completion).not.toBe(result);
+      expect(calls).toEqual(['analyze', 'publish', 'healthScore']);
+      expect(healthScoreReads).toBe(1);
+      expect(input).toEqual(beforeInput);
+      expect(Object.keys(dependencies)).toEqual([
+        'analyzeRepository',
+        'publishAnalysisResult',
+        'getWorkingDirectory',
+      ]);
+      expect(log).not.toHaveBeenCalled();
+      expect(warn).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
+      expect(stdout).not.toHaveBeenCalled();
+      expect(stderr).not.toHaveBeenCalled();
+      expect(workingDirectory).not.toHaveBeenCalled();
+    } finally {
+      log.mockRestore();
+      warn.mockRestore();
+      error.mockRestore();
+      stdout.mockRestore();
+      stderr.mockRestore();
+      workingDirectory.mockRestore();
+    }
   });
 
-  it.each(['', ' ./réquirements "quoted"/../spec.md '])(
-    'forwards an explicit requirements path unchanged with the same captured working directory',
-    async (requirementsPath) => {
-      const analyzeRepository = vi.fn().mockResolvedValue({} as AnalyzeRepositoryResult);
+  it.each([
+    ['', ''],
+    [' ./réquirements "quoted"/../spec.md ', ' ./输出 "quoted"/../reports/./out '],
+  ])(
+    'preserves lexical requirements and output overrides with one working-directory capture',
+    async (requirementsPath, outputDirectoryPath) => {
+      const result = createResult(100);
+      const analyzeRepository = vi.fn().mockResolvedValue(result);
       const publishAnalysisResult = vi.fn().mockResolvedValue(ANALYSIS_OUTPUT_SUMMARY);
       const getWorkingDirectory = vi.fn(() => WORKING_DIRECTORY);
-      const input = { configPath: LEXICAL_CONFIG_PATH, requirementsPath };
+      const input = { configPath: LEXICAL_CONFIG_PATH, requirementsPath, outputDirectoryPath };
       const beforeInput = structuredClone(input);
-      const dependencies = Object.freeze({
+
+      const completion = await runAnalyzeLocal(input, {
         analyzeRepository,
         publishAnalysisResult,
         getWorkingDirectory,
       });
 
-      await runAnalyzeLocal(input, dependencies);
-
+      expect(completion).toEqual({ healthScore: 100 });
       expect(getWorkingDirectory).toHaveBeenCalledTimes(1);
-      expect(analyzeRepository).toHaveBeenCalledTimes(1);
       expect(analyzeRepository).toHaveBeenCalledWith({
         configPath: LEXICAL_CONFIG_PATH,
         workingDirectory: WORKING_DIRECTORY,
@@ -77,138 +160,141 @@ describe('runAnalyzeLocal', () => {
           required: true,
         },
       });
-      expect(analyzeRepository.mock.calls[0]?.[0]?.requirementsOverride.path).toBe(
-        requirementsPath,
-      );
+      expect(publishAnalysisResult).toHaveBeenCalledWith({
+        result,
+        outputDirectoryOverride: outputDirectoryPath,
+      });
+      expect(input).toEqual(beforeInput);
+    },
+  );
+
+  it('does not inspect loadedConfig while returning the published result health score', async () => {
+    const expectedScore = 73;
+    const loadedConfigReadFailure = new Error('loadedConfig must remain private to publication');
+    const report = Object.freeze({ healthScore: expectedScore });
+    const result = Object.freeze(
+      Object.defineProperty({ report } as AnalyzeRepositoryResult, 'loadedConfig', {
+        enumerable: true,
+        get: () => {
+          throw loadedConfigReadFailure;
+        },
+      }),
+    );
+    const analyzeRepository = vi.fn().mockResolvedValue(result);
+    const publishAnalysisResult = vi.fn((input: { result: AnalyzeRepositoryResult }) => {
+      expect(input.result).toBe(result);
+      return Promise.resolve(ANALYSIS_OUTPUT_SUMMARY);
+    });
+    const input = { configPath: 'config.yml' };
+    const beforeInput = structuredClone(input);
+    const dependencies = Object.freeze({
+      analyzeRepository,
+      publishAnalysisResult,
+      getWorkingDirectory: () => WORKING_DIRECTORY,
+    });
+
+    const completion = await runAnalyzeLocal(input, dependencies);
+
+    expect(completion).toEqual({ healthScore: expectedScore });
+    expect(Object.keys(completion)).toEqual(['healthScore']);
+    expect(completion).not.toHaveProperty('loadedConfig');
+    expect(completion).not.toHaveProperty('report');
+    expect(publishAnalysisResult).toHaveBeenCalledTimes(1);
+    expect(input).toEqual(beforeInput);
+    expect(Object.keys(dependencies)).toEqual([
+      'analyzeRepository',
+      'publishAnalysisResult',
+      'getWorkingDirectory',
+    ]);
+  });
+
+  it('omits undefined overrides without changing the approved analysis input', async () => {
+    const result = createResult(0);
+    const analyzeRepository = vi.fn().mockResolvedValue(result);
+    const publishAnalysisResult = vi.fn().mockResolvedValue(ANALYSIS_OUTPUT_SUMMARY);
+
+    const completion = await runAnalyzeLocal(
+      { configPath: LEXICAL_CONFIG_PATH },
+      {
+        analyzeRepository,
+        publishAnalysisResult,
+        getWorkingDirectory: () => WORKING_DIRECTORY,
+      },
+    );
+
+    expect(completion).toEqual({ healthScore: 0 });
+    expect(analyzeRepository).toHaveBeenCalledWith({
+      configPath: LEXICAL_CONFIG_PATH,
+      workingDirectory: WORKING_DIRECTORY,
+    });
+    expect(publishAnalysisResult).toHaveBeenCalledWith({ result });
+  });
+
+  it('propagates analysis failure by identity without publishing, completion, output, or process behavior', async () => {
+    const failure = new Error('private analysis failure');
+    const analyzeRepository = vi.fn().mockRejectedValue(failure);
+    const publishAnalysisResult = vi.fn().mockResolvedValue(ANALYSIS_OUTPUT_SUMMARY);
+    const getWorkingDirectory = vi.fn(() => WORKING_DIRECTORY);
+    const input = Object.freeze({ configPath: 'config.yml' });
+    const beforeInput = structuredClone(input);
+    const dependencies = Object.freeze({
+      analyzeRepository,
+      publishAnalysisResult,
+      getWorkingDirectory,
+    });
+    const log = vi.spyOn(console, 'log');
+    const warn = vi.spyOn(console, 'warn');
+    const error = vi.spyOn(console, 'error');
+    const stdout = vi.spyOn(process.stdout, 'write');
+    const stderr = vi.spyOn(process.stderr, 'write');
+    const workingDirectory = vi.spyOn(process, 'cwd');
+
+    try {
+      await expect(runAnalyzeLocal(input, dependencies)).rejects.toBe(failure);
+
+      expect(analyzeRepository).toHaveBeenCalledTimes(1);
+      expect(publishAnalysisResult).not.toHaveBeenCalled();
+      expect(getWorkingDirectory).toHaveBeenCalledTimes(1);
       expect(input).toEqual(beforeInput);
       expect(Object.keys(dependencies)).toEqual([
         'analyzeRepository',
         'publishAnalysisResult',
         'getWorkingDirectory',
       ]);
-    },
-  );
-
-  it('returns an opaque result unchanged without inspecting LoadedConfig or report', async () => {
-    const result = Object.defineProperties({} as AnalyzeRepositoryResult, {
-      loadedConfig: {
-        get() {
-          throw new Error('LoadedConfig must remain opaque to the CLI adapter');
-        },
-      },
-      report: {
-        get() {
-          throw new Error('Report must remain opaque to the CLI adapter');
-        },
-      },
-    });
-    const analyzeRepository = vi.fn().mockResolvedValue(result);
-    const publishAnalysisResult = vi.fn().mockResolvedValue(ANALYSIS_OUTPUT_SUMMARY);
-
-    const actual = await runAnalyzeLocal(
-      { configPath: 'config.yml' },
-      { analyzeRepository, publishAnalysisResult, getWorkingDirectory: () => WORKING_DIRECTORY },
-    );
-
-    expect(actual).toBe(result);
-    expect(analyzeRepository).toHaveBeenCalledWith({
-      configPath: 'config.yml',
-      workingDirectory: WORKING_DIRECTORY,
-    });
-  });
-
-  it('passes an analysis failure through by identity without output or process behavior', async () => {
-    const failure = new Error('private analysis failure');
-    const analyzeRepository = vi.fn().mockRejectedValue(failure);
-    const publishAnalysisResult = vi.fn().mockResolvedValue(ANALYSIS_OUTPUT_SUMMARY);
-    const log = vi.spyOn(console, 'log');
-    const warn = vi.spyOn(console, 'warn');
-    const error = vi.spyOn(console, 'error');
-
-    try {
-      await expect(
-        runAnalyzeLocal(
-          { configPath: 'config.yml' },
-          {
-            analyzeRepository,
-            publishAnalysisResult,
-            getWorkingDirectory: () => WORKING_DIRECTORY,
-          },
-        ),
-      ).rejects.toBe(failure);
-      expect(analyzeRepository).toHaveBeenCalledTimes(1);
       expect(log).not.toHaveBeenCalled();
       expect(warn).not.toHaveBeenCalled();
       expect(error).not.toHaveBeenCalled();
+      expect(stdout).not.toHaveBeenCalled();
+      expect(stderr).not.toHaveBeenCalled();
+      expect(workingDirectory).not.toHaveBeenCalled();
     } finally {
       log.mockRestore();
       warn.mockRestore();
       error.mockRestore();
+      stdout.mockRestore();
+      stderr.mockRestore();
+      workingDirectory.mockRestore();
     }
   });
 
-  it.each(['', ' ./输出 "quoted"/../reports/./out '])(
-    'forwards explicit output overrides unchanged after analysis',
-    async (outputDirectoryPath) => {
-      const result = {} as AnalyzeRepositoryResult;
-      const calls: string[] = [];
-      const analyzeRepository = vi.fn(async () => {
-        calls.push('analyze');
-        return result;
-      });
-      const publishAnalysisResult = vi.fn(async () => {
-        calls.push('publish');
-        return ANALYSIS_OUTPUT_SUMMARY;
-      });
-      const input = { configPath: 'config.yml', outputDirectoryPath };
-      const before = structuredClone(input);
+  it('propagates publication failure by identity without repeating analysis or returning completion', async () => {
+    const result = createResult(60);
+    const failure = new Error('private publication failure');
+    const analyzeRepository = vi.fn().mockResolvedValue(result);
+    const publishAnalysisResult = vi.fn().mockRejectedValue(failure);
 
-      await runAnalyzeLocal(input, {
-        analyzeRepository,
-        publishAnalysisResult,
-        getWorkingDirectory: () => WORKING_DIRECTORY,
-      });
-
-      expect(calls).toEqual(['analyze', 'publish']);
-      expect(publishAnalysisResult).toHaveBeenCalledWith({
-        result,
-        outputDirectoryOverride: outputDirectoryPath,
-      });
-      expect(input).toEqual(before);
-    },
-  );
-
-  it('does not publish after analysis failure and propagates publication failures unchanged', async () => {
-    const analysisFailure = new Error('analysis');
-    const failedAnalysis = vi.fn().mockRejectedValue(analysisFailure);
-    const publisher = vi.fn().mockResolvedValue(ANALYSIS_OUTPUT_SUMMARY);
     await expect(
       runAnalyzeLocal(
-        { configPath: 'x' },
+        { configPath: 'config.yml' },
         {
-          analyzeRepository: failedAnalysis,
-          publishAnalysisResult: publisher,
+          analyzeRepository,
+          publishAnalysisResult,
           getWorkingDirectory: () => WORKING_DIRECTORY,
         },
       ),
-    ).rejects.toBe(analysisFailure);
-    expect(publisher).not.toHaveBeenCalled();
+    ).rejects.toBe(failure);
 
-    const result = {} as AnalyzeRepositoryResult;
-    const publicationFailure = new Error('publication');
-    const analysis = vi.fn().mockResolvedValue(result);
-    const failedPublisher = vi.fn().mockRejectedValue(publicationFailure);
-    await expect(
-      runAnalyzeLocal(
-        { configPath: 'x' },
-        {
-          analyzeRepository: analysis,
-          publishAnalysisResult: failedPublisher,
-          getWorkingDirectory: () => WORKING_DIRECTORY,
-        },
-      ),
-    ).rejects.toBe(publicationFailure);
-    expect(analysis).toHaveBeenCalledTimes(1);
-    expect(failedPublisher).toHaveBeenCalledTimes(1);
+    expect(analyzeRepository).toHaveBeenCalledTimes(1);
+    expect(publishAnalysisResult).toHaveBeenCalledTimes(1);
   });
 });
