@@ -3,10 +3,12 @@
 ## Audit status
 
 - **Current tree:** `PUBLIC-READY` after the local `pnpm audit:public` check reports no blocking findings in tracked files.
-- **Git history:** `BLOCKED` for public release review. Historical-only machine-specific path references were detected in reachable commits. No secret-pattern, credential-file, or private-URL category was detected by the local history scan.
-- **Author metadata:** one distinct historical author identity was found. Its email needs a publication decision because it is not one of the documented fixture or GitHub noreply forms.
-- **History remediation:** recommended before public publication. This slice did not rewrite history, alter authors, remove refs, or change remotes.
+- **Git history:** `PUBLIC-READY` only after the authorized history rewrite and every post-rewrite validation and complete-history scan succeed.
+- **Package:** `PUBLIC-READY` after production-boundary validation confirms only the intended package files are packed.
+- **Remote publication:** `NOT YET PUBLISHED`.
+- **Recovery backup:** an external private backup and Git bundle are retained for recovery. They contain the original history and must never be published.
 
+This status is contingent: until the rewrite and validation complete successfully, historical public-readiness is not established. No remote publication has occurred.
 ## Audit boundaries
 
 `pnpm audit:public` scans current tracked regular files only. It checks filenames and UTF-8 text for machine-specific paths, identities, credential-like filenames, high-confidence secret patterns, private-style URLs, and tracked generated artifacts. Findings are deterministic and repository-relative; output never includes the matched source text.
