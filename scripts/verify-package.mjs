@@ -751,7 +751,7 @@ function sameProjection(left, right) {
 }
 
 function assertPrivateContentAbsent(content) {
-  const forbidden = [projectRoot, verificationRoot, process.env.HOME, '/home/example-user'].filter(
+  const forbidden = [projectRoot, verificationRoot, process.env.HOME].filter(
     (value) => typeof value === 'string' && value.length > 0,
   );
   if (
@@ -778,7 +778,7 @@ function npmCommand() {
 /** @typedef {{ score: number, label: string, findings: Array<{ ruleId: string, severity: string, repositoryId: string, file: string, property?: string }>, scenarioCount: number }} StableProjection */
 
 function assertPackageContentAbsent(content) {
-  const forbidden = [projectRoot, verificationRoot, process.env.HOME, '/home/example-user'].filter(
+  const forbidden = [projectRoot, verificationRoot, process.env.HOME].filter(
     (value) => typeof value === 'string' && value.length > 0,
   );
   if (forbidden.some((value) => content.includes(value)) || content.includes('/home/')) {

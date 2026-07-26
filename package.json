@@ -21,6 +21,7 @@
     "demo:verify": "node scripts/demo.mjs --verify",
     "demo:thresholds": "node scripts/demo.mjs --verify-thresholds",
     "demo:clean": "node scripts/demo.mjs --clean",
+    "audit:public": "node scripts/audit-public-readiness.mjs",
     "verify:package": "node scripts/verify-package.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
