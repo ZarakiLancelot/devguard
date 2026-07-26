@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 
 const GIT_TIMEOUT_MS = 10_000;
 const GIT_TERMINATION_GRACE_MS = 250;
+const CLI_TIMEOUT_MS = 30_000;
+const CLI_TERMINATION_GRACE_MS = 500;
 const BASE_COMMIT_DATE = '2026-01-01T00:00:00Z';
 const HEAD_COMMIT_DATE = '2026-01-02T00:00:00Z';
 const GIT_IDENTITY_NAME = 'DevGuard Demo';
@@ -26,14 +28,66 @@ const SUCCESS_OUTPUT = [
   'Commits: 2',
 ].join('\n');
 
+class InvalidCommandError extends Error {}
+
 class SetupError extends Error {}
 
+class VerificationError extends Error {
+  constructor(kind) {
+    super(kind);
+    this.kind = kind;
+  }
+}
+
 async function main() {
-  if (process.argv.length !== 2) {
-    throw new SetupError();
+  let mode;
+
+  try {
+    mode = parseMode(process.argv.slice(2));
+  } catch (error) {
+    if (error instanceof InvalidCommandError) {
+      process.stderr.write('DevGuard Book demo command is invalid.\n');
+      process.exitCode = 1;
+      return;
+    }
+
+    throw error;
   }
 
-  const paths = await resolveDemoPaths();
+  try {
+    const paths = await resolveDemoPaths();
+    await prepareDemoRepository(paths);
+
+    if (mode === 'setup') {
+      process.stdout.write(`${SUCCESS_OUTPUT}\n`);
+      return;
+    }
+
+    const result = await verifyBuiltAnalysis(paths);
+    process.stdout.write(formatVerificationSuccess(result));
+  } catch (error) {
+    if (mode === 'verify') {
+      process.stderr.write('DevGuard Book demo verification failed.\n');
+    } else {
+      process.stderr.write('DevGuard Book demo setup failed.\n');
+    }
+    process.exitCode = 1;
+  }
+}
+
+function parseMode(argumentsValue) {
+  if (argumentsValue.length === 0) {
+    return 'setup';
+  }
+
+  if (argumentsValue.length === 1 && argumentsValue[0] === '--verify') {
+    return 'verify';
+  }
+
+  throw new InvalidCommandError();
+}
+
+async function prepareDemoRepository(paths) {
   await validateDemoPaths(paths);
   await recreateWorkspace(paths);
   await copyWorkspaceConfiguration(paths);
@@ -44,8 +98,6 @@ async function main() {
   await applyHeadTemplate(paths);
   await createHeadCommit(paths.repositoryRoot);
   await verifyDemoRepository(paths, baseCommit);
-
-  process.stdout.write(`${SUCCESS_OUTPUT}\n`);
 }
 
 async function resolveDemoPaths() {
@@ -65,9 +117,13 @@ async function resolveDemoPaths() {
     baseTemplateRepository: path.resolve(templateRoot, 'base', 'library'),
     headTemplateRepository: path.resolve(templateRoot, 'head', 'library'),
     templateConfiguration: path.resolve(templateRoot, '.devguard.yml'),
+    expectationManifest: path.resolve(templateRoot, 'expected.json'),
+    builtCli: path.resolve(projectRoot, 'dist', 'cli', 'index.js'),
     generatedParent,
     workspaceRoot,
     repositoryRoot,
+    markdownReport: path.resolve(workspaceRoot, 'reports', 'book-library-report.md'),
+    jsonReport: path.resolve(workspaceRoot, 'reports', 'book-library-report.json'),
   };
 }
 
@@ -78,6 +134,7 @@ async function validateDemoPaths(paths) {
   await assertDirectory(paths.baseTemplateRepository);
   await assertDirectory(paths.headTemplateRepository);
   await assertRegularFile(paths.templateConfiguration);
+  await assertRegularFile(paths.expectationManifest);
 
   if (
     !isStrictChild(paths.demoDirectory, paths.projectRoot) ||
@@ -158,6 +215,478 @@ async function initializeRepository(repositoryRoot) {
 
   await mkdir(hooksDirectory, { recursive: true });
   await runGit(['config', '--local', 'core.hooksPath', '.git/devguard-hooks'], repositoryRoot);
+}
+
+async function verifyBuiltAnalysis(paths) {
+  await assertVerificationRegularFile(paths.builtCli, 'missing-built-cli');
+
+  const cliResult = await runBuiltCli(paths);
+  if (cliResult.exitCode !== 0 || cliResult.signal !== null) {
+    throw new VerificationError('cli-execution-failure');
+  }
+
+  if (cliResult.stderr !== '') {
+    throw new VerificationError('cli-stderr-not-empty');
+  }
+
+  await assertVerificationRegularFile(paths.jsonReport, 'missing-json-report');
+  await assertVerificationRegularFile(paths.markdownReport, 'missing-markdown-report');
+
+  const report = await readJsonReport(paths.jsonReport);
+  const manifest = await readExpectationManifest(paths.expectationManifest);
+  const result = verifyReportStructure(report, manifest);
+  const expectedCliOutput = `DevGuard local analysis completed.\nReports published.\nHealth score: ${result.healthScore}/100\n`;
+  if (cliResult.stdout !== expectedCliOutput) {
+    throw new VerificationError('cli-stdout-mismatch');
+  }
+
+  const markdown = await readReportText(paths.markdownReport, 'markdown-read-failure');
+  verifyMarkdownReport(markdown, result);
+  verifyPrivacy([JSON.stringify(report), markdown, cliResult.stdout, cliResult.stderr], paths);
+
+  return result;
+}
+
+function formatVerificationSuccess(result) {
+  return (
+    [
+      'DevGuard Book demo verified.',
+      `Findings: ${result.findingCount}`,
+      `Scenarios: ${result.scenarioCount}`,
+      `Health score: ${result.healthScore}/100`,
+      `Health label: ${result.healthLabel}`,
+      'Reports: Markdown and JSON',
+    ].join('\n') + '\n'
+  );
+}
+
+async function runBuiltCli(paths) {
+  return runProcess(
+    process.execPath,
+    [
+      paths.builtCli,
+      'analyze',
+      'local',
+      '--config',
+      'demo/.work/book-library/.devguard.yml',
+      '--verbose',
+    ],
+    paths.projectRoot,
+    CLI_TIMEOUT_MS,
+    CLI_TERMINATION_GRACE_MS,
+  );
+}
+
+async function readJsonReport(file) {
+  const text = await readReportText(file, 'invalid-json');
+
+  try {
+    const report = JSON.parse(text);
+    if (!isPlainObject(report)) {
+      throw new Error('Report must be an object');
+    }
+    return report;
+  } catch {
+    throw new VerificationError('invalid-json');
+  }
+}
+
+async function readExpectationManifest(file) {
+  const text = await readReportText(file, 'invalid-manifest');
+
+  try {
+    const manifest = JSON.parse(text);
+    if (!isPlainObject(manifest)) {
+      throw new Error('Manifest must be an object');
+    }
+    return manifest;
+  } catch {
+    throw new VerificationError('invalid-manifest');
+  }
+}
+
+async function readReportText(file, failureKind) {
+  try {
+    return await readFile(file, 'utf8');
+  } catch {
+    throw new VerificationError(failureKind);
+  }
+}
+
+function verifyReportStructure(report, manifest) {
+  const repository = requirePlainObject(manifest.repository, 'manifest-repository');
+  const expectedFindings = requireArray(manifest.expectedFindings, 'manifest-findings');
+  const expectedFindingCount = requireNumber(
+    manifest.expectedFindingCount,
+    'manifest-finding-count',
+  );
+  const expectedScenarioCount = requireNumber(
+    manifest.expectedGeneratedScenarioCount,
+    'manifest-scenario-count',
+  );
+  const expectedHealthScore = requireNumber(manifest.predictedHealthScore, 'manifest-health-score');
+  const expectedHealthLabel = requireString(manifest.predictedHealthLabel, 'manifest-health-label');
+  const manifestStatus = requireString(manifest.status, 'manifest-status');
+
+  if (manifestStatus !== 'predicted-unverified' && manifestStatus !== 'verified') {
+    throw new VerificationError('manifest-status');
+  }
+
+  const repositoryId = requireString(repository.id, 'manifest-repository-id');
+  const repositoryRole = requireString(repository.role, 'manifest-repository-role');
+  const baseRef = requireString(repository.baseRef, 'manifest-base-ref');
+  const reportRepositories = requireArray(report.repositories, 'report-repositories');
+  if (reportRepositories.length !== 1) {
+    throw new VerificationError('repository-mismatch');
+  }
+
+  const reportRepository = requirePlainObject(reportRepositories[0], 'report-repository');
+  if (
+    requireString(reportRepository.repositoryId, 'report-repository-id') !== repositoryId ||
+    requireString(reportRepository.role, 'report-repository-role') !== repositoryRole ||
+    requireString(reportRepository.baseRef, 'report-base-ref') !== baseRef
+  ) {
+    throw new VerificationError('repository-mismatch');
+  }
+
+  const findings = requireArray(report.findings, 'report-findings');
+  const generatedTests = requireArray(report.generatedTests, 'report-generated-tests');
+  const summary = requirePlainObject(report.summary, 'report-summary');
+  const healthScore = requireNumber(report.healthScore, 'report-health-score');
+  const healthLabel = requireString(report.healthLabel, 'report-health-label');
+
+  if (
+    report.version !== '1.0' ||
+    findings.length !== expectedFindingCount ||
+    findings.length !== expectedFindings.length ||
+    generatedTests.length !== expectedScenarioCount ||
+    healthScore !== expectedHealthScore ||
+    healthLabel !== expectedHealthLabel ||
+    requireNumber(summary.totalCount, 'summary-total') !== findings.length
+  ) {
+    throw new VerificationError('report-expectation-mismatch');
+  }
+
+  const actualFindings = findings.map(projectFinding);
+  const expectedProjection = expectedFindings.map(projectExpectedFinding);
+  if (!sameJson(actualFindings, expectedProjection) || !areFindingsOrdered(findings)) {
+    throw new VerificationError('finding-mismatch');
+  }
+
+  verifySummary(summary, actualFindings);
+  verifyGeneratedTests(generatedTests, findings);
+
+  return {
+    findingCount: findings.length,
+    scenarioCount: generatedTests.length,
+    healthScore,
+    healthLabel,
+    findingProjection: actualFindings,
+    scenarioProjection: projectScenarios(generatedTests, findings),
+  };
+}
+
+function projectExpectedFinding(value) {
+  const finding = requirePlainObject(value, 'expected-finding');
+  const location = requirePlainObject(finding.location, 'expected-location');
+  const ruleId = requireString(finding.ruleId, 'expected-rule-id');
+
+  return {
+    ruleId,
+    severity: requireString(finding.severity, 'expected-severity'),
+    category: expectedCategory(ruleId),
+    repositoryId: requireString(location.repositoryId, 'expected-location-repository'),
+    file: requireString(location.file, 'expected-location-file'),
+    ...(location.property === undefined
+      ? {}
+      : { property: requireString(location.property, 'expected-location-property') }),
+  };
+}
+
+function projectFinding(value) {
+  const finding = requirePlainObject(value, 'report-finding');
+  const location = requirePlainObject(finding.location, 'report-finding-location');
+  const ruleId = requireString(finding.ruleId, 'report-finding-rule');
+  const metadata =
+    finding.metadata === undefined ? undefined : requirePlainObject(finding.metadata, 'metadata');
+
+  return {
+    ruleId,
+    severity: requireString(finding.severity, 'report-finding-severity'),
+    category: requireString(finding.category, 'report-finding-category'),
+    repositoryId: requireString(location.repositoryId, 'report-finding-repository'),
+    file: requireString(location.file, 'report-finding-file'),
+    ...(metadata?.property === undefined
+      ? {}
+      : { property: requireString(metadata.property, 'report-finding-property') }),
+  };
+}
+
+function expectedCategory(ruleId) {
+  return ruleId.startsWith('contract.') ? 'contract' : 'risk';
+}
+
+function verifySummary(summary, findings) {
+  const counts = {
+    critical: findings.filter((finding) => finding.severity === 'critical').length,
+    high: findings.filter((finding) => finding.severity === 'high').length,
+    warning: findings.filter((finding) => finding.severity === 'warning').length,
+    info: findings.filter((finding) => finding.severity === 'info').length,
+    contract: findings.filter((finding) => finding.category === 'contract').length,
+    risk: findings.filter((finding) => finding.category === 'risk').length,
+    testing: findings.filter((finding) => finding.category === 'testing').length,
+  };
+
+  if (
+    requireNumber(summary.criticalCount, 'summary-critical') !== counts.critical ||
+    requireNumber(summary.highCount, 'summary-high') !== counts.high ||
+    requireNumber(summary.warningCount, 'summary-warning') !== counts.warning ||
+    requireNumber(summary.infoCount, 'summary-info') !== counts.info ||
+    requireNumber(summary.contractCount, 'summary-contract') !== counts.contract ||
+    requireNumber(summary.riskCount, 'summary-risk') !== counts.risk ||
+    requireNumber(summary.testingCount, 'summary-testing') !== counts.testing
+  ) {
+    throw new VerificationError('summary-mismatch');
+  }
+}
+
+function verifyGeneratedTests(generatedTests, findings) {
+  const findingIds = new Set(
+    findings.map((finding) =>
+      requireString(requirePlainObject(finding, 'finding').id, 'finding-id'),
+    ),
+  );
+  const relatedIds = [];
+
+  for (const value of generatedTests) {
+    const generatedTest = requirePlainObject(value, 'generated-test');
+    if (requireString(generatedTest.framework, 'generated-test-framework') !== 'scenario-only') {
+      throw new VerificationError('scenario-framework-mismatch');
+    }
+
+    const relatedFindingIds = requireArray(
+      generatedTest.relatedFindingIds,
+      'generated-test-related-findings',
+    );
+    if (relatedFindingIds.length !== 1) {
+      throw new VerificationError('scenario-relationship-mismatch');
+    }
+
+    const relatedId = requireString(relatedFindingIds[0], 'generated-test-related-finding');
+    if (!findingIds.has(relatedId)) {
+      throw new VerificationError('scenario-relationship-mismatch');
+    }
+
+    relatedIds.push(relatedId);
+  }
+
+  if (
+    new Set(relatedIds).size !== findings.length ||
+    !sameTextList(relatedIds, [...findingIds]) ||
+    !areGeneratedTestsOrdered(generatedTests)
+  ) {
+    throw new VerificationError('scenario-relationship-mismatch');
+  }
+}
+
+function projectScenarios(generatedTests, findings) {
+  const findingById = new Map(
+    findings.map((value) => {
+      const finding = requirePlainObject(value, 'finding');
+      return [
+        requireString(finding.id, 'finding-id'),
+        requireString(finding.ruleId, 'finding-rule'),
+      ];
+    }),
+  );
+
+  return generatedTests.map((value) => {
+    const generatedTest = requirePlainObject(value, 'generated-test');
+    const relatedFindingIds = requireArray(generatedTest.relatedFindingIds, 'related-finding-ids');
+    return {
+      framework: requireString(generatedTest.framework, 'generated-test-framework'),
+      relatedRuleIds: relatedFindingIds.map((id) =>
+        findingById.get(requireString(id, 'related-finding-id')),
+      ),
+    };
+  });
+}
+
+function areFindingsOrdered(findings) {
+  return findings.every((value, index) => {
+    if (index === 0) {
+      return true;
+    }
+
+    return compareFindings(findings[index - 1], value) <= 0;
+  });
+}
+
+function compareFindings(leftValue, rightValue) {
+  const left = requirePlainObject(leftValue, 'left-finding');
+  const right = requirePlainObject(rightValue, 'right-finding');
+  const leftLocation = requirePlainObject(left.location, 'left-location');
+  const rightLocation = requirePlainObject(right.location, 'right-location');
+  const severityRank = { critical: 0, high: 1, warning: 2, info: 3 };
+  const categoryRank = { contract: 0, risk: 1, testing: 2 };
+
+  return (
+    (severityRank[requireString(left.severity, 'left-severity')] ?? 99) -
+      (severityRank[requireString(right.severity, 'right-severity')] ?? 99) ||
+    (categoryRank[requireString(left.category, 'left-category')] ?? 99) -
+      (categoryRank[requireString(right.category, 'right-category')] ?? 99) ||
+    compareText(
+      requireString(leftLocation.repositoryId, 'left-repository'),
+      requireString(rightLocation.repositoryId, 'right-repository'),
+    ) ||
+    compareText(
+      requireString(leftLocation.file, 'left-file'),
+      requireString(rightLocation.file, 'right-file'),
+    ) ||
+    compareText(
+      requireString(left.ruleId, 'left-rule'),
+      requireString(right.ruleId, 'right-rule'),
+    ) ||
+    compareText(requireString(left.id, 'left-id'), requireString(right.id, 'right-id')) ||
+    compareText(
+      left.rootCauseId === undefined ? '' : requireString(left.rootCauseId, 'left-root-cause'),
+      right.rootCauseId === undefined ? '' : requireString(right.rootCauseId, 'right-root-cause'),
+    )
+  );
+}
+
+function areGeneratedTestsOrdered(generatedTests) {
+  return generatedTests.every((value, index) => {
+    if (index === 0) {
+      return true;
+    }
+
+    return compareGeneratedTests(generatedTests[index - 1], value) <= 0;
+  });
+}
+
+function compareGeneratedTests(leftValue, rightValue) {
+  const left = requirePlainObject(leftValue, 'left-generated-test');
+  const right = requirePlainObject(rightValue, 'right-generated-test');
+  const leftRelated = requireArray(left.relatedFindingIds, 'left-related-findings');
+  const rightRelated = requireArray(right.relatedFindingIds, 'right-related-findings');
+
+  return (
+    compareText(
+      requireString(left.framework, 'left-framework'),
+      requireString(right.framework, 'right-framework'),
+    ) ||
+    compareText(
+      requireString(left.title, 'left-title'),
+      requireString(right.title, 'right-title'),
+    ) ||
+    compareText(requireString(left.id, 'left-test-id'), requireString(right.id, 'right-test-id')) ||
+    compareText(
+      [...new Set(leftRelated.map((id) => requireString(id, 'left-related-id')))]
+        .sort()
+        .join('\u0000'),
+      [...new Set(rightRelated.map((id) => requireString(id, 'right-related-id')))]
+        .sort()
+        .join('\u0000'),
+    )
+  );
+}
+
+function verifyMarkdownReport(markdown, result) {
+  const requiredFragments = [
+    '# DevGuard PR Health Report',
+    '## Health Score',
+    `- Score: ${result.healthScore} / 100`,
+    `- Status: ${formatMarkdownHealthLabel(result.healthLabel)}`,
+    '## Suggested Tests',
+    escapeMarkdownInline('library:src/types/book.ts'),
+    escapeMarkdownInline('library:config/access-policy.json'),
+    escapeMarkdownInline('library:src/services/catalog.ts'),
+    ...result.findingProjection.map((finding) => `- Rule: ${escapeMarkdownInline(finding.ruleId)}`),
+  ];
+
+  if (!requiredFragments.every((fragment) => markdown.includes(fragment))) {
+    throw new VerificationError('markdown-expectation-mismatch');
+  }
+}
+
+function escapeMarkdownInline(value) {
+  return value.replace(/[`*_{}[\]()#+.!|>-]/gu, '\\$&');
+}
+
+function formatMarkdownHealthLabel(healthLabel) {
+  return healthLabel.replace(/_/gu, ' ');
+}
+
+function verifyPrivacy(values, paths) {
+  const content = values.join('\n');
+  const forbiddenValues = [
+    paths.projectRoot,
+    paths.workspaceRoot,
+    process.env.HOME,
+    process.env.USER,
+    process.env.LOGNAME,
+  ].filter((value) => typeof value === 'string' && value.length > 0);
+
+  if (
+    forbiddenValues.some((value) => content.includes(value)) ||
+    content.includes('/home/') ||
+    /(?:token|secret|credential|password)/iu.test(content) ||
+    /(?:stack trace|error:\s)/iu.test(content)
+  ) {
+    throw new VerificationError('privacy-violation');
+  }
+}
+
+async function assertVerificationRegularFile(file, failureKind) {
+  try {
+    const stats = await lstat(file);
+    if (!stats.isFile() || stats.isSymbolicLink()) {
+      throw new Error('not regular');
+    }
+  } catch {
+    throw new VerificationError(failureKind);
+  }
+}
+
+function requirePlainObject(value, failureKind) {
+  if (!isPlainObject(value)) {
+    throw new VerificationError(failureKind);
+  }
+  return value;
+}
+
+function requireArray(value, failureKind) {
+  if (!Array.isArray(value)) {
+    throw new VerificationError(failureKind);
+  }
+  return value;
+}
+
+function requireString(value, failureKind) {
+  if (typeof value !== 'string') {
+    throw new VerificationError(failureKind);
+  }
+  return value;
+}
+
+function requireNumber(value, failureKind) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new VerificationError(failureKind);
+  }
+  return value;
+}
+
+function isPlainObject(value) {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function sameJson(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function compareText(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 async function createBaseCommit(repositoryRoot) {
@@ -422,6 +951,91 @@ async function readGitLines(args, repositoryRoot) {
         .sort();
 }
 
+function runProcess(executable, args, workingDirectory, timeoutMilliseconds, graceMilliseconds) {
+  return new Promise((resolve, reject) => {
+    let child;
+
+    try {
+      child = spawn(executable, args, {
+        cwd: workingDirectory,
+        env: process.env,
+        shell: false,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
+      });
+    } catch {
+      reject(new VerificationError('cli-execution-failure'));
+      return;
+    }
+
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    let timedOut = false;
+    let timeoutTimer;
+    let terminationTimer;
+
+    const finish = (result) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      clearTimeout(timeoutTimer);
+      clearTimeout(terminationTimer);
+      resolve(result);
+    };
+
+    const fail = () => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      clearTimeout(timeoutTimer);
+      clearTimeout(terminationTimer);
+      reject(new VerificationError('cli-execution-failure'));
+    };
+
+    const terminate = (signal) => {
+      try {
+        child.kill(signal);
+      } catch {
+        // The fixed verification timeout outcome remains authoritative.
+      }
+    };
+
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk.toString('utf8');
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk.toString('utf8');
+    });
+    child.once('error', fail);
+    child.once('close', (exitCode, signal) => {
+      if (timedOut) {
+        fail();
+        return;
+      }
+
+      finish({ stdout, stderr, exitCode, signal });
+    });
+
+    timeoutTimer = setTimeout(() => {
+      if (settled) {
+        return;
+      }
+
+      timedOut = true;
+      terminate('SIGTERM');
+      terminationTimer = setTimeout(() => {
+        terminate('SIGKILL');
+        fail();
+      }, graceMilliseconds);
+    }, timeoutMilliseconds);
+  });
+}
+
 function runGit(args, repositoryRoot, environment = process.env) {
   return new Promise((resolve, reject) => {
     let child;
@@ -502,7 +1116,4 @@ function runGit(args, repositoryRoot, environment = process.env) {
   });
 }
 
-void main().catch(() => {
-  process.stderr.write('DevGuard Book demo setup failed.\n');
-  process.exitCode = 1;
-});
+void main();

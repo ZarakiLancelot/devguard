@@ -1,5 +1,5 @@
 {
-  "status": "predicted-unverified",
+  "status": "verified",
   "authority": "non-authoritative-design-expectation",
   "repository": {
     "id": "library",
@@ -50,5 +50,5 @@
     "markdown": "book-library-report.md",
     "json": "book-library-report.json"
   },
-  "verificationNote": "Finding count, codes, severities, locations, scenarios, score, and health label must be confirmed by the first real end-to-end execution. Final threshold literals must not be fixed until that verification succeeds."
+  "verificationNote": "Finding count, codes, severities, locations, scenarios, score, and health label were confirmed by the Milestone 12 real built-CLI execution. Final threshold literals remain deferred to the approved threshold-validation slice."
 }
