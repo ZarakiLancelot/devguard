@@ -56,6 +56,13 @@ async function main() {
 
   try {
     const paths = await resolveDemoPaths();
+
+    if (mode === 'clean') {
+      await cleanDemoWorkspace(paths);
+      process.stdout.write('DevGuard Book demo workspace cleaned.\n');
+      return;
+    }
+
     await prepareDemoRepository(paths);
 
     if (mode === 'setup') {
@@ -76,6 +83,8 @@ async function main() {
       process.stderr.write('DevGuard Book demo threshold verification failed.\n');
     } else if (mode === 'verify') {
       process.stderr.write('DevGuard Book demo verification failed.\n');
+    } else if (mode === 'clean') {
+      process.stderr.write('DevGuard Book demo cleanup failed.\n');
     } else {
       process.stderr.write('DevGuard Book demo setup failed.\n');
     }
@@ -96,7 +105,53 @@ function parseMode(argumentsValue) {
     return 'verify-thresholds';
   }
 
+  if (argumentsValue.length === 1 && argumentsValue[0] === '--clean') {
+    return 'clean';
+  }
+
   throw new InvalidCommandError();
+}
+
+async function cleanDemoWorkspace(paths) {
+  await assertDirectory(paths.projectRoot);
+  await assertDirectory(paths.demoDirectory);
+  if (
+    !isStrictChild(paths.demoDirectory, paths.projectRoot) ||
+    !isStrictChild(paths.generatedParent, paths.demoDirectory) ||
+    !isStrictChild(paths.workspaceRoot, paths.generatedParent)
+  ) {
+    throw new SetupError();
+  }
+
+  const generatedParent = await lstatOrUndefined(paths.generatedParent);
+  if (generatedParent === undefined) {
+    return;
+  }
+  if (!generatedParent.isDirectory() || generatedParent.isSymbolicLink()) {
+    throw new SetupError();
+  }
+
+  const parentRealPath = await realpath(paths.generatedParent);
+  const demoRealPath = await realpath(paths.demoDirectory);
+  if (!isStrictChild(parentRealPath, demoRealPath)) {
+    throw new SetupError();
+  }
+
+  const workspace = await lstatOrUndefined(paths.workspaceRoot);
+  if (workspace === undefined) {
+    return;
+  }
+  if (!workspace.isDirectory() || workspace.isSymbolicLink()) {
+    throw new SetupError();
+  }
+
+  const workspaceRealPath = await realpath(paths.workspaceRoot);
+  if (!isStrictChild(workspaceRealPath, parentRealPath)) {
+    throw new SetupError();
+  }
+
+  await rm(paths.workspaceRoot, { force: true, recursive: true });
+  await assertAbsent(paths.workspaceRoot);
 }
 
 async function prepareDemoRepository(paths) {
