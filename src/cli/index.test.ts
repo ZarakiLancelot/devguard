@@ -169,7 +169,7 @@ describe('DevGuard CLI', () => {
     expect(harness.getWorkingDirectory).not.toHaveBeenCalled();
   });
 
-  it('runs exactly one analysis with lexical config text and emits only the temporary completion line', async () => {
+  it('writes the final local analysis summary once after successful publication', async () => {
     const canonicalConfigPath = '/private/canonical/.devguard.yml';
     const workspaceBase = '/private/canonical';
     const repositoryPath = '/private/repository';
