@@ -1,7 +1,14 @@
+import { Command, CommanderError } from 'commander';
 import { describe, expect, it, vi } from 'vitest';
 import { CliHandledFailure } from './cli-error-presenter.js';
+import {
+  CLI_EXIT_OPERATIONAL_FAILURE,
+  CLI_EXIT_QUALITY_THRESHOLD_NOT_MET,
+  CLI_EXIT_SUCCESS,
+  CLI_EXIT_USAGE_ERROR,
+} from './exit-codes.js';
 import { evaluateFailBelow as evaluateFailBelowPure } from './fail-below.js';
-import { runCli } from './index.js';
+import { main, runCli } from './index.js';
 import { createProgram, type CliDependencies } from './program.js';
 import { QualityThresholdFailure } from './quality-threshold-failure.js';
 import {
@@ -14,6 +21,7 @@ import { GitRepositoryValidationError } from '../sources/git-repository-validato
 import { GitFileLoadError } from '../sources/repository-file-loader.js';
 import { LocalRepositoryContextError } from '../sources/local-context-builder.js';
 import { ExplicitRequirementsOverrideError } from '../sources/explicit-requirements-override-loader.js';
+import { AnalysisOutputError } from '../reports/analysis-output-error.js';
 
 const LEXICAL_CONFIG_PATH = ' ./selected config/.devguard.yml ';
 const WORKING_DIRECTORY = '/caller/working-directory';
@@ -381,7 +389,7 @@ describe('runCli', () => {
     expect(harness.stderr).toEqual([]);
   });
 
-  it('returns provisional generic failure code one after a safely handled analysis failure', async () => {
+  it('returns the operational failure code after a safely handled analysis failure', async () => {
     const harness = createHarness();
     harness.analyzeRepository.mockRejectedValue(new Error('private entrypoint failure'));
 
@@ -390,14 +398,14 @@ describe('runCli', () => {
       harness.dependencies,
     );
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(CLI_EXIT_OPERATIONAL_FAILURE);
     expect(harness.stdout).toEqual([]);
     expect(harness.stderr).toEqual([
       'DevGuard error [INTERNAL_ERROR]: Analysis could not be completed.\n',
     ]);
   });
 
-  it('returns Commander exit codes for help and parser failures without analysis', async () => {
+  it('normalizes Commander help and parser outcomes without analysis', async () => {
     const helpHarness = createHarness();
     const syntaxHarness = createHarness();
 
@@ -407,8 +415,8 @@ describe('runCli', () => {
       syntaxHarness.dependencies,
     );
 
-    expect(helpExitCode).toBe(0);
-    expect(syntaxExitCode).toBe(1);
+    expect(helpExitCode).toBe(CLI_EXIT_SUCCESS);
+    expect(syntaxExitCode).toBe(CLI_EXIT_USAGE_ERROR);
     expect(helpHarness.analyzeRepository).not.toHaveBeenCalled();
     expect(syntaxHarness.analyzeRepository).not.toHaveBeenCalled();
     expect(syntaxHarness.stderr.join('')).toContain('error:');
@@ -416,8 +424,8 @@ describe('runCli', () => {
   });
 });
 
-describe('provisional threshold outer behavior', () => {
-  it('keeps the threshold signal on the generic outer fallback until exit-code integration', async () => {
+describe('quality threshold outer behavior', () => {
+  it('maps the nominal threshold signal to the quality failure code without duplicate output', async () => {
     const harness = createHarness();
     harness.analyzeRepository.mockResolvedValue({
       report: { healthScore: 79 },
@@ -428,7 +436,7 @@ describe('provisional threshold outer behavior', () => {
       harness.dependencies,
     );
 
-    expect(exitCode).toBe(1);
+    expect(exitCode).toBe(CLI_EXIT_QUALITY_THRESHOLD_NOT_MET);
     expect(harness.stdout).toEqual([]);
     expect(harness.stderr).toEqual(['DevGuard quality threshold not met.\n']);
   });
@@ -599,6 +607,23 @@ describe('fail-below Commander wiring', () => {
     },
   );
 
+  it('maps a known output failure to operational code using its existing single safe diagnostic', async () => {
+    const harness = createHarness();
+    harness.publishAnalysisResult.mockRejectedValue(
+      new AnalysisOutputError('OUTPUT_WRITE_FAILED', 'private output failure'),
+    );
+
+    await expect(
+      runCli(
+        ['node', 'devguard', 'analyze', 'local', '--config', 'config.yml'],
+        harness.dependencies,
+      ),
+    ).resolves.toBe(CLI_EXIT_OPERATIONAL_FAILURE);
+    expect(harness.stderr).toEqual([
+      'DevGuard error [OUTPUT_WRITE_FAILED]: Analysis report output could not be written safely.\n',
+    ]);
+  });
+
   it('keeps a missing fail-below value in Commander syntax flow without action work', async () => {
     const harness = createHarness();
 
@@ -648,5 +673,215 @@ describe('fail-below Commander wiring', () => {
     expect(publicationHarness.stderr).toEqual([
       'DevGuard error [INTERNAL_ERROR]: Analysis could not be completed.\n',
     ]);
+  });
+});
+
+describe('Model C exit-code mapping', () => {
+  async function runWithParseFailure(failure: unknown): Promise<number> {
+    const parseAsync = vi.spyOn(Command.prototype, 'parseAsync').mockRejectedValueOnce(failure);
+
+    try {
+      return await runCli(['node', 'devguard']);
+    } finally {
+      parseAsync.mockRestore();
+    }
+  }
+
+  it('uses nominal identity for quality and handled signals, including quality subclasses', async () => {
+    class DerivedQualityThresholdFailure extends QualityThresholdFailure {}
+
+    await expect(runWithParseFailure(new QualityThresholdFailure())).resolves.toBe(
+      CLI_EXIT_QUALITY_THRESHOLD_NOT_MET,
+    );
+    await expect(runWithParseFailure(new DerivedQualityThresholdFailure())).resolves.toBe(
+      CLI_EXIT_QUALITY_THRESHOLD_NOT_MET,
+    );
+    await expect(runWithParseFailure(new CliHandledFailure())).resolves.toBe(
+      CLI_EXIT_OPERATIONAL_FAILURE,
+    );
+  });
+
+  it.each([
+    { name: 'quality signal imitation', value: { name: 'QualityThresholdFailure' } },
+    {
+      name: 'handled signal imitation',
+      value: { name: 'CliHandledFailure', message: 'PRIVATE_MESSAGE_SENTINEL' },
+    },
+    { name: 'error', value: new Error('PRIVATE_MESSAGE_SENTINEL') },
+    { name: 'string', value: 'PRIVATE_MESSAGE_SENTINEL' },
+    { name: 'number', value: 42 },
+    { name: 'null', value: null },
+    { name: 'undefined', value: undefined },
+    {
+      name: 'hostile-looking object',
+      value: { code: 1, message: 'PRIVATE_MESSAGE_SENTINEL', cause: 'private' },
+    },
+  ])('maps unknown outer $name values to operational failure without output', async ({ value }) => {
+    const stdout = vi.spyOn(process.stdout, 'write');
+    const stderr = vi.spyOn(process.stderr, 'write');
+
+    try {
+      await expect(runWithParseFailure(value)).resolves.toBe(CLI_EXIT_OPERATIONAL_FAILURE);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(stderr).not.toHaveBeenCalled();
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+    }
+  });
+
+  it('normalizes Commander zero and nonzero outcomes without inspecting messages', async () => {
+    await expect(
+      runWithParseFailure(
+        new CommanderError(CLI_EXIT_SUCCESS, 'commander.helpDisplayed', 'private'),
+      ),
+    ).resolves.toBe(CLI_EXIT_SUCCESS);
+    await expect(
+      runWithParseFailure(new CommanderError(99, 'commander.custom', 'private')),
+    ).resolves.toBe(CLI_EXIT_USAGE_ERROR);
+    await expect(
+      runWithParseFailure({ exitCode: 0, name: 'CommanderError', message: 'private' }),
+    ).resolves.toBe(CLI_EXIT_OPERATIONAL_FAILURE);
+  });
+
+  it.each([
+    ['unknown command', ['node', 'devguard', 'unknown']],
+    ['unknown option', ['node', 'devguard', 'analyze', 'local', '--config', 'config.yml', '--bad']],
+    ['missing config', ['node', 'devguard', 'analyze', 'local']],
+    [
+      'missing requirements value',
+      ['node', 'devguard', 'analyze', 'local', '--config', 'config.yml', '--requirements'],
+    ],
+    [
+      'missing output value',
+      ['node', 'devguard', 'analyze', 'local', '--config', 'config.yml', '--output'],
+    ],
+    [
+      'missing fail-below value',
+      ['node', 'devguard', 'analyze', 'local', '--config', 'config.yml', '--fail-below'],
+    ],
+    [
+      'invalid fail-below',
+      ['node', 'devguard', 'analyze', 'local', '--config', 'config.yml', '--fail-below', 'invalid'],
+    ],
+    [
+      'out-of-range fail-below',
+      ['node', 'devguard', 'analyze', 'local', '--config', 'config.yml', '--fail-below', '101'],
+    ],
+  ])('maps Commander $0 to usage code without analysis or presentation', async (_label, argv) => {
+    const harness = createHarness();
+
+    await expect(runCli(argv, harness.dependencies)).resolves.toBe(CLI_EXIT_USAGE_ERROR);
+    expect(harness.analyzeRepository).not.toHaveBeenCalled();
+    expect(harness.publishAnalysisResult).not.toHaveBeenCalled();
+    expect(harness.stderr.join('')).not.toContain('DevGuard error [');
+  });
+
+  it.each([
+    ['config', new ConfigLoadError('CONFIG_FILE_NOT_FOUND')],
+    [
+      'requirements',
+      new ExplicitRequirementsOverrideError('REQUIREMENTS_OVERRIDE_NOT_FOUND', 'private'),
+    ],
+    ['analysis', new AnalyzeRepositoryError('ANALYZER_EXECUTION_FAILED', 'private')],
+  ])(
+    'maps known $0 failures to operational code once their safe diagnostic is rendered',
+    async (_label, failure) => {
+      const harness = createHarness();
+      harness.analyzeRepository.mockRejectedValue(failure);
+
+      await expect(
+        runCli(
+          ['node', 'devguard', 'analyze', 'local', '--config', 'config.yml'],
+          harness.dependencies,
+        ),
+      ).resolves.toBe(CLI_EXIT_OPERATIONAL_FAILURE);
+      expect(harness.stderr).toHaveLength(1);
+    },
+  );
+
+  it('maps publication and unknown action errors to operational code without duplicate diagnostics', async () => {
+    const publicationHarness = createHarness();
+    publicationHarness.publishAnalysisResult.mockRejectedValue(
+      new Error('PRIVATE_MESSAGE_SENTINEL'),
+    );
+
+    await expect(
+      runCli(
+        ['node', 'devguard', 'analyze', 'local', '--config', 'config.yml'],
+        publicationHarness.dependencies,
+      ),
+    ).resolves.toBe(CLI_EXIT_OPERATIONAL_FAILURE);
+    expect(publicationHarness.stderr).toEqual([
+      'DevGuard error [INTERNAL_ERROR]: Analysis could not be completed.\n',
+    ]);
+  });
+
+  it('sets process.exitCode only for nonzero outcomes and leaves successful help unchanged', async () => {
+    const originalExitCode = process.exitCode;
+    const thresholdHarness = createHarness();
+    thresholdHarness.analyzeRepository.mockResolvedValue({
+      report: { healthScore: 79 },
+    } as AnalyzeRepositoryResult);
+
+    try {
+      process.exitCode = undefined;
+      await main(
+        ['node', 'devguard', 'analyze', 'local', '--config', 'config.yml', '--fail-below', '80'],
+        thresholdHarness.dependencies,
+      );
+      expect(process.exitCode).toBe(CLI_EXIT_QUALITY_THRESHOLD_NOT_MET);
+
+      process.exitCode = undefined;
+      const operationalHarness = createHarness();
+      operationalHarness.analyzeRepository.mockRejectedValue(new Error('private'));
+      await main(
+        ['node', 'devguard', 'analyze', 'local', '--config', 'config.yml'],
+        operationalHarness.dependencies,
+      );
+      expect(process.exitCode).toBe(CLI_EXIT_OPERATIONAL_FAILURE);
+
+      process.exitCode = undefined;
+      const usageHarness = createHarness();
+      await main(['node', 'devguard', 'analyze', 'local'], usageHarness.dependencies);
+      expect(process.exitCode).toBe(CLI_EXIT_USAGE_ERROR);
+
+      process.exitCode = undefined;
+      const helpHarness = createHarness();
+      await main(['node', 'devguard', '--help'], helpHarness.dependencies);
+      expect(process.exitCode).toBeUndefined();
+    } finally {
+      process.exitCode = originalExitCode;
+    }
+  });
+});
+
+describe('Model C threshold success outcomes', () => {
+  it.each([
+    ['threshold pass', 81, '80'],
+    ['threshold equality', 80, '80'],
+  ])('returns success for $0', async (_label, healthScore, threshold) => {
+    const harness = createHarness();
+    harness.analyzeRepository.mockResolvedValue({
+      report: { healthScore },
+    } as AnalyzeRepositoryResult);
+
+    await expect(
+      runCli(
+        [
+          'node',
+          'devguard',
+          'analyze',
+          'local',
+          '--config',
+          'config.yml',
+          '--fail-below',
+          threshold,
+        ],
+        harness.dependencies,
+      ),
+    ).resolves.toBe(CLI_EXIT_SUCCESS);
+    expect(harness.stdout).toEqual(['DevGuard local analysis completed.\n']);
+    expect(harness.stderr).toEqual([]);
   });
 });
