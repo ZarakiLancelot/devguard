@@ -1,0 +1,54 @@
+{
+  "status": "predicted-unverified",
+  "authority": "non-authoritative-design-expectation",
+  "repository": {
+    "id": "library",
+    "role": "fullstack",
+    "baseRef": "demo-base"
+  },
+  "expectedFindingCount": 4,
+  "expectedFindings": [
+    {
+      "ruleId": "contract.incompatible-type",
+      "severity": "critical",
+      "location": {
+        "repositoryId": "library",
+        "file": "src/types/book.ts",
+        "property": "pageCount"
+      }
+    },
+    {
+      "ruleId": "contract.missing-property",
+      "severity": "high",
+      "location": {
+        "repositoryId": "library",
+        "file": "src/types/book.ts",
+        "property": "authorId"
+      }
+    },
+    {
+      "ruleId": "risk.sensitive-file-change",
+      "severity": "high",
+      "location": {
+        "repositoryId": "library",
+        "file": "config/access-policy.json"
+      }
+    },
+    {
+      "ruleId": "risk.missing-related-tests",
+      "severity": "warning",
+      "location": {
+        "repositoryId": "library",
+        "file": "src/services/catalog.ts"
+      }
+    }
+  ],
+  "expectedGeneratedScenarioCount": 4,
+  "predictedHealthScore": 57,
+  "predictedHealthLabel": "HIGH_RISK",
+  "reportFiles": {
+    "markdown": "book-library-report.md",
+    "json": "book-library-report.json"
+  },
+  "verificationNote": "Finding count, codes, severities, locations, scenarios, score, and health label must be confirmed by the first real end-to-end execution. Final threshold literals must not be fixed until that verification succeeds."
+}

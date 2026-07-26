@@ -1,0 +1,31 @@
+version: 1
+
+repositories:
+  library:
+    path: ./library
+    baseRef: demo-base
+    role: fullstack
+
+openapi:
+  repository: library
+  path: docs/openapi.yaml
+
+contracts:
+  - name: UpdateBook
+    openapiSchema: UpdateBookRequest
+    typescript:
+      repository: library
+      file: src/types/book.ts
+      type: UpdateBookPayload
+
+risk:
+  sensitivePatterns:
+    - config/access-policy.json
+
+testing:
+  framework: scenario-only
+
+output:
+  directory: reports
+  markdown: book-library-report.md
+  json: book-library-report.json

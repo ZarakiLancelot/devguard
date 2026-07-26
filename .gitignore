@@ -21,3 +21,6 @@ coverage/
 kiro-session-*.json
 *.session.json
 kiro-session-before-rename.json
+
+# Generated Book demo workspace
+demo/.work/
