@@ -8,6 +8,7 @@ import {
   type ParsedFailBelow,
 } from './fail-below.js';
 import { CliHandledFailure, presentCliError } from './cli-error-presenter.js';
+import { formatLocalAnalysisSummary } from './local-analysis-summary.js';
 import { QualityThresholdFailure } from './quality-threshold-failure.js';
 import { runAnalyzeLocal } from './run-analyze-local.js';
 
@@ -29,7 +30,6 @@ const DEFAULT_DEPENDENCIES: Readonly<CliDependencies> = Object.freeze({
   evaluateFailBelow,
 });
 
-const COMPLETION_MESSAGE = 'DevGuard local analysis completed.\n';
 const FAIL_BELOW_ARGUMENT_MESSAGE = 'Fail-below score must be a decimal value from 0 through 100.';
 
 /** Creates the Commander program without executing analysis or reading the working directory. */
@@ -61,12 +61,14 @@ export function createProgram(overrides: Partial<CliDependencies> = {}): Command
     .option('--requirements <path>', 'Path to explicit requirements file')
     .option('--output <path>', 'Path to analysis output directory')
     .option('--fail-below <score>', 'Fail when health score is below score', parseFailBelowOption)
+    .option('--verbose', 'Show the health score after successful publication')
     .action(
       async (options: {
         config: string;
         requirements?: string;
         output?: string;
         failBelow?: ParsedFailBelow;
+        verbose?: boolean;
       }) => {
         try {
           const completion = await runAnalyzeLocal(
@@ -95,7 +97,12 @@ export function createProgram(overrides: Partial<CliDependencies> = {}): Command
             }
           }
 
-          dependencies.writeStdout(COMPLETION_MESSAGE);
+          dependencies.writeStdout(
+            formatLocalAnalysisSummary({
+              healthScore: completion.healthScore,
+              verbose: options.verbose === true,
+            }),
+          );
         } catch (error: unknown) {
           if (error instanceof CommanderError || error instanceof QualityThresholdFailure) {
             throw error;
