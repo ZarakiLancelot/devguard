@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { Command, CommanderError, InvalidArgumentError } from 'commander';
 import { analyzeRepository } from '../application/analyze-repository.js';
 import { publishAnalysisResult } from '../application/publish-analysis-result.js';
@@ -11,6 +13,19 @@ import { CliHandledFailure, presentCliError } from './cli-error-presenter.js';
 import { formatLocalAnalysisSummary } from './local-analysis-summary.js';
 import { QualityThresholdFailure } from './quality-threshold-failure.js';
 import { runAnalyzeLocal } from './run-analyze-local.js';
+
+const PACKAGE_VERSION = readPackageVersion();
+
+function readPackageVersion(): string {
+  const packageJsonPath = fileURLToPath(new URL('../../package.json', import.meta.url));
+  const metadata = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as { version?: unknown };
+
+  if (typeof metadata.version !== 'string' || metadata.version.length === 0) {
+    throw new Error('Package version metadata is invalid.');
+  }
+
+  return metadata.version;
+}
 
 export interface CliDependencies {
   analyzeRepository: typeof analyzeRepository;
@@ -43,7 +58,7 @@ export function createProgram(overrides: Partial<CliDependencies> = {}): Command
   program
     .name('devguard')
     .description('Developer productivity CLI for preventive code-review analysis')
-    .version('1.0.0')
+    .version(PACKAGE_VERSION)
     .exitOverride()
     .configureOutput({
       writeOut: dependencies.writeStdout,

@@ -1,14 +1,21 @@
 {
-  "name": "devguard",
-  "version": "1.0.0",
+  "name": "@edwineinsen/devguard",
+  "version": "0.1.0",
   "description": "Developer productivity CLI for preventive code-review analysis",
   "type": "module",
   "main": "dist/cli/index.js",
   "bin": {
     "devguard": "dist/cli/index.js"
   },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "build": "tsc",
+    "build": "pnpm run build:prod",
+    "build:prod": "node scripts/build-production.mjs",
+    "prepack": "node scripts/build-production.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src/",
@@ -29,7 +36,19 @@
     "typescript",
     "contract-checking"
   ],
+  "author": "Edwin Einsen Vásquez Velásquez",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ZarakiLancelot/devguard.git"
+  },
+  "homepage": "https://github.com/ZarakiLancelot/devguard#readme",
+  "bugs": {
+    "url": "https://github.com/ZarakiLancelot/devguard/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
     "commander": "12.1.0",
     "minimatch": "10.0.1",
