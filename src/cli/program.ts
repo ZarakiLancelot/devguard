@@ -1,10 +1,12 @@
 import { Command, CommanderError } from 'commander';
 import { analyzeRepository } from '../application/analyze-repository.js';
+import { publishAnalysisResult } from '../application/publish-analysis-result.js';
 import { CliHandledFailure, presentCliError } from './cli-error-presenter.js';
 import { runAnalyzeLocal } from './run-analyze-local.js';
 
 export interface CliDependencies {
   analyzeRepository: typeof analyzeRepository;
+  publishAnalysisResult: typeof publishAnalysisResult;
   getWorkingDirectory: () => string;
   writeStdout: (text: string) => void;
   writeStderr: (text: string) => void;
@@ -12,6 +14,7 @@ export interface CliDependencies {
 
 const DEFAULT_DEPENDENCIES: Readonly<CliDependencies> = Object.freeze({
   analyzeRepository,
+  publishAnalysisResult,
   getWorkingDirectory: () => process.cwd(),
   writeStdout: (text: string) => process.stdout.write(text),
   writeStderr: (text: string) => process.stderr.write(text),
@@ -46,7 +49,8 @@ export function createProgram(overrides: Partial<CliDependencies> = {}): Command
     .description('Analyze local Git repositories')
     .requiredOption('--config <path>', 'Path to .devguard.yml configuration file')
     .option('--requirements <path>', 'Path to explicit requirements file')
-    .action(async (options: { config: string; requirements?: string }) => {
+    .option('--output <path>', 'Path to analysis output directory')
+    .action(async (options: { config: string; requirements?: string; output?: string }) => {
       try {
         await runAnalyzeLocal(
           {
@@ -54,9 +58,11 @@ export function createProgram(overrides: Partial<CliDependencies> = {}): Command
             ...(options.requirements === undefined
               ? {}
               : { requirementsPath: options.requirements }),
+            ...(options.output === undefined ? {} : { outputDirectoryPath: options.output }),
           },
           {
             analyzeRepository: dependencies.analyzeRepository,
+            publishAnalysisResult: dependencies.publishAnalysisResult,
             getWorkingDirectory: dependencies.getWorkingDirectory,
           },
         );

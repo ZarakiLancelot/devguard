@@ -18,6 +18,7 @@ const WORKING_DIRECTORY = '/caller/working-directory';
 
 interface CliHarness {
   analyzeRepository: ReturnType<typeof vi.fn>;
+  publishAnalysisResult: ReturnType<typeof vi.fn>;
   getWorkingDirectory: ReturnType<typeof vi.fn>;
   stdout: string[];
   stderr: string[];
@@ -26,11 +27,13 @@ interface CliHarness {
 
 function createHarness(): CliHarness {
   const analyzeRepository = vi.fn().mockResolvedValue({} as AnalyzeRepositoryResult);
+  const publishAnalysisResult = vi.fn().mockResolvedValue({});
   const getWorkingDirectory = vi.fn(() => WORKING_DIRECTORY);
   const stdout: string[] = [];
   const stderr: string[] = [];
   const dependencies = {
     analyzeRepository,
+    publishAnalysisResult,
     getWorkingDirectory,
     writeStdout: (text: string): void => {
       stdout.push(text);
@@ -40,7 +43,14 @@ function createHarness(): CliHarness {
     },
   } as unknown as CliDependencies;
 
-  return { analyzeRepository, getWorkingDirectory, stdout, stderr, dependencies };
+  return {
+    analyzeRepository,
+    publishAnalysisResult,
+    getWorkingDirectory,
+    stdout,
+    stderr,
+    dependencies,
+  };
 }
 
 async function captureParseFailure(program: ReturnType<typeof createProgram>): Promise<unknown> {
@@ -68,7 +78,8 @@ describe('DevGuard CLI', () => {
     expect(local).toBeDefined();
     expect(configOption?.required).toBe(true);
     expect(requirementsOption).toBeDefined();
-    for (const option of ['--output', '--verbose', '--fail-below']) {
+    expect(local?.options.some((candidate) => candidate.long === '--output')).toBe(true);
+    for (const option of ['--verbose', '--fail-below']) {
       expect(local?.options.some((candidate) => candidate.long === option)).toBe(false);
     }
     expect(local?.options.some((candidate) => candidate.long === '--format')).toBe(false);
@@ -310,6 +321,35 @@ describe('DevGuard CLI', () => {
     expect(harness.analyzeRepository).not.toHaveBeenCalled();
     expect(harness.stderr.join('')).not.toContain('DevGuard error [');
     expect(harness.stderr.join('')).toContain('error:');
+  });
+});
+
+describe('missing local configuration option', () => {
+  it('remains a Commander syntax failure without analysis, publication, success output, or action error presentation', async () => {
+    const harness = createHarness();
+    const program = createProgram(harness.dependencies);
+    const exit = vi.spyOn(process, 'exit');
+    const log = vi.spyOn(console, 'log');
+    const error = vi.spyOn(console, 'error');
+
+    try {
+      await expect(
+        program.parseAsync(['analyze', 'local'], { from: 'user' }),
+      ).rejects.toMatchObject({
+        code: 'commander.missingMandatoryOptionValue',
+      });
+      expect(harness.analyzeRepository).not.toHaveBeenCalled();
+      expect(harness.publishAnalysisResult).not.toHaveBeenCalled();
+      expect(harness.stdout).toEqual([]);
+      expect(harness.stderr.join('')).not.toContain('DevGuard error [');
+      expect(exit).not.toHaveBeenCalled();
+      expect(log).not.toHaveBeenCalled();
+      expect(error).not.toHaveBeenCalled();
+    } finally {
+      exit.mockRestore();
+      log.mockRestore();
+      error.mockRestore();
+    }
   });
 });
 
