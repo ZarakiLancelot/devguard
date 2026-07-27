@@ -350,7 +350,7 @@ describe('DevGuard CLI', () => {
     expect(harness.evaluateFailBelow).not.toHaveBeenCalled();
     expect(harness.stdout.join('')).toContain('--verbose');
     expect(harness.stdout.join('')).toContain('Show the health score after successful publication');
-    expect(harness.stdout.join('')).toContain('0.1.0\n');
+    expect(harness.stdout.join('')).toContain('0.1.1\n');
     expect(harness.stderr.join('')).not.toContain('DevGuard error [');
     expect(harness.stderr.join('')).toContain('error:');
   });

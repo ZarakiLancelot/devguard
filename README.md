@@ -80,7 +80,7 @@ pnpm demo:clean
 
 ## Installation and setup
 
-The package is npm-compatible and locally verified, but it is **not yet published**. The planned GitHub repository URL is `https://github.com/ZarakiLancelot/devguard`; its public availability is not yet confirmed.
+DevGuard is published on npm as [`@edwineinsen/devguard@0.1.1`](https://www.npmjs.com/package/@edwineinsen/devguard). The GitHub repository is `https://github.com/ZarakiLancelot/devguard`.
 
 When the repository is available, a development checkout can use:
 
@@ -93,13 +93,16 @@ pnpm build
 node dist/cli/index.js --help
 ```
 
-After npm publication, the intended global installation command will be:
+### Install from npm
 
 ```sh
-npm install --global @edwineinsen/devguard
+npm install --save-dev @edwineinsen/devguard@0.1.1
+npx --no-install devguard --help
+npx --no-install devguard --version
+npx --no-install devguard analyze local --config .devguard.yml
 ```
 
-Until then, use a repository checkout or the verified local package workflow below.
+Installation may require npm to resolve declared dependencies. Once installed, DevGuard’s analysis core is offline-capable and does not require an LLM or hosted DevGuard service.
 
 ### Verified package workflow
 

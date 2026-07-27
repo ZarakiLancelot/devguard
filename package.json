@@ -1,6 +1,6 @@
 {
   "name": "@edwineinsen/devguard",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Developer productivity CLI for preventive code-review analysis",
   "type": "module",
   "main": "dist/cli/index.js",

@@ -189,7 +189,8 @@ devguard analyze local --config .devguard.yml --fail-below 58</code></pre>
         <p class="eyebrow">REPOSITORY WORKFLOW</p>
         <h2>Quick Start</h2>
         <p>
-          Run the verified demo directly from the repository without globally installing DevGuard.
+          Install the published package for project-local use, or run the verified demo directly
+          from the repository.
         </p>
         <pre><code>git clone https://github.com/ZarakiLancelot/devguard.git
 cd devguard
@@ -197,6 +198,16 @@ corepack enable
 pnpm install
 pnpm build
 pnpm demo</code></pre>
+        <p>
+          <a
+            href="https://www.npmjs.com/package/@edwineinsen/devguard"
+            target="_blank"
+            rel="noopener noreferrer"
+            >View the npm package</a
+          >
+        </p>
+        <pre><code>npm install --save-dev @edwineinsen/devguard@0.1.1
+npx --no-install devguard --help</code></pre>
         <p>For repository-local direct CLI execution:</p>
         <pre><code>node dist/cli/index.js analyze local --config .devguard.yml</code></pre>
         <p>
