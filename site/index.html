@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0d1117" />
+    <meta
+      name="description"
+      content="Deterministic, local-first CLI that detects contract drift between OpenAPI and TypeScript, analyzes Git change risks, generates test scenarios, and produces health-scored Markdown and JSON reports."
+    />
+    <title>DevGuard | Deterministic Contract and Change-Risk Analysis</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <nav class="nav" aria-label="Primary navigation">
+        <a class="brand" href="#top">DevGuard <span>v0.1.0</span></a>
+        <div class="nav-links">
+          <a href="#features">Features</a><a href="#demo">Demo</a
+          ><a href="#quick-start">Quick Start</a><a href="#limitations">Limitations</a
+          ><a
+            class="github"
+            href="https://github.com/ZarakiLancelot/devguard"
+            target="_blank"
+            rel="noopener noreferrer"
+            >View GitHub <span aria-hidden="true">↗</span></a
+          >
+        </div>
+      </nav>
+    </header>
+    <main id="main">
+      <section class="hero" id="top">
+        <div class="hero-copy">
+          <p class="eyebrow">LOCAL-FIRST DEVELOPER TOOL</p>
+          <h1>Detect Contract Drift Before It Reaches Production.</h1>
+          <p class="lead">
+            A deterministic, offline-capable CLI that compares OpenAPI and TypeScript contracts,
+            analyzes local Git change risks, and calculates repository health. No LLM required.
+          </p>
+          <div class="badges">
+            <span>v0.1.0</span><span>1,270 Tests Passing</span><span>Local-First</span
+            ><span>No LLM Required</span>
+          </div>
+          <p class="actions">
+            <a class="button primary" href="#quick-start">Get Started</a
+            ><a
+              class="button secondary"
+              href="https://github.com/ZarakiLancelot/devguard"
+              target="_blank"
+              rel="noopener noreferrer"
+              >View Repository</a
+            >
+          </p>
+        </div>
+        <figure class="hero-visual">
+          <img
+            src="assets/devguard-book-demo.png"
+            width="1440"
+            height="760"
+            alt="Verified DevGuard Book demo terminal output: 4 findings, 4 scenarios, health score 57 out of 100, and HIGH_RISK label."
+          />
+          <figcaption>Verified fictional Book demo — reports are Markdown and JSON.</figcaption>
+        </figure>
+      </section>
+      <section id="features">
+        <p class="eyebrow">WHY DEVGUARD</p>
+        <h2>Common Risks in Repository Changes</h2>
+        <div class="cards">
+          <article>
+            <h3>Contract Drift</h3>
+            <p>
+              Backend OpenAPI schemas and frontend TypeScript types evolve independently, increasing
+              the risk of runtime integration defects.
+            </p>
+          </article>
+          <article>
+            <h3>Sensitive Changes</h3>
+            <p>
+              Configuration, policy, and other sensitive files may change without enough review or
+              test context.
+            </p>
+          </article>
+          <article>
+            <h3>Missing Test Evidence</h3>
+            <p>
+              Production code may change without corresponding test-file changes or configured
+              evidence.
+            </p>
+          </article>
+        </div>
+      </section>
+      <section>
+        <p class="eyebrow">HOW IT WORKS</p>
+        <h2>Deterministic Analysis Pipeline</h2>
+        <ol class="pipeline">
+          <li>
+            <b>1. Configuration</b><span>Reads <code>.devguard.yml</code></span>
+          </li>
+          <li><b>2. Git changes</b><span>Computes merge-base-aware changes</span></li>
+          <li>
+            <b>3. Normalization</b><span>Normalizes mapped OpenAPI and TypeScript contracts</span>
+          </li>
+          <li><b>4. Analysis</b><span>Produces contract and repository-risk findings</span></li>
+          <li>
+            <b>5. Scenarios and score</b
+            ><span>Generates deterministic test scenarios and health score</span>
+          </li>
+          <li><b>6. Publication</b><span>Writes Markdown and JSON reports</span></li>
+        </ol>
+      </section>
+      <section id="demo">
+        <p class="eyebrow">VERIFIED BOOK RESULT</p>
+        <h2>Evidence, not assumptions</h2>
+        <div class="results">
+          <div><strong>57/100</strong><span>Health score</span></div>
+          <div><strong>HIGH_RISK</strong><span>Health label</span></div>
+          <div><strong>4</strong><span>Findings</span></div>
+          <div><strong>4</strong><span>Scenarios</span></div>
+        </div>
+        <p>
+          The fictional Book case identifies <code>pageCount</code> as OpenAPI integer versus
+          TypeScript string, a required <code>authorId</code> absent from TypeScript, a sensitive
+          <code>config/access-policy.json</code> change, and a service change without expected
+          related-test evidence.
+        </p>
+        <p class="rule-list">
+          <code>contract.incompatible-type</code> <code>contract.missing-property</code>
+          <code>risk.sensitive-file-change</code> <code>risk.missing-related-tests</code>
+        </p>
+        <div class="gallery">
+          <figure>
+            <a href="assets/devguard-markdown-report.png"
+              ><img
+                src="assets/devguard-markdown-report.png"
+                width="1440"
+                height="1180"
+                loading="lazy"
+                alt="DevGuard Markdown health report showing score, summary, and Book findings."
+            /></a>
+            <figcaption>Reviewer-readable Markdown health report</figcaption>
+          </figure>
+          <figure>
+            <a href="assets/devguard-cli-help.png"
+              ><img
+                src="assets/devguard-cli-help.png"
+                width="1440"
+                height="760"
+                loading="lazy"
+                alt="DevGuard CLI help showing usage, analyze command, help, and version options."
+            /></a>
+            <figcaption>Discoverable local CLI commands</figcaption>
+          </figure>
+        </div>
+      </section>
+      <section>
+        <p class="eyebrow">QUALITY POLICY</p>
+        <h2>Thresholds preserve evidence</h2>
+        <div class="two-col">
+          <div>
+            <p>
+              After a successful analysis, DevGuard publishes reports before evaluating
+              <code>--fail-below</code>. A missed threshold returns exit code 1, allowing external
+              automation or CI jobs to enforce a quality policy.
+            </p>
+            <ul>
+              <li><code>56</code> passes with exit <code>0</code></li>
+              <li><code>57</code> passes with exit <code>0</code></li>
+              <li><code>58</code> returns exit <code>1</code> after report publication</li>
+            </ul>
+            <pre><code>devguard analyze local --config .devguard.yml --fail-below 56
+devguard analyze local --config .devguard.yml --fail-below 57
+devguard analyze local --config .devguard.yml --fail-below 58</code></pre>
+          </div>
+          <figure>
+            <a href="assets/devguard-thresholds.png"
+              ><img
+                src="assets/devguard-thresholds.png"
+                width="1440"
+                height="760"
+                loading="lazy"
+                alt="Verified Book demo threshold output: 56 and 57 exit zero; 58 exits one after reports are published."
+            /></a>
+            <figcaption>Verified threshold behavior</figcaption>
+          </figure>
+        </div>
+      </section>
+      <section id="quick-start">
+        <p class="eyebrow">REPOSITORY WORKFLOW</p>
+        <h2>Quick Start</h2>
+        <p>
+          Run the verified demo directly from the repository without globally installing DevGuard.
+        </p>
+        <pre><code>git clone https://github.com/ZarakiLancelot/devguard.git
+cd devguard
+corepack enable
+pnpm install
+pnpm build
+pnpm demo</code></pre>
+        <p>For repository-local direct CLI execution:</p>
+        <pre><code>node dist/cli/index.js analyze local --config .devguard.yml</code></pre>
+        <p>
+          <a
+            href="https://github.com/ZarakiLancelot/devguard#configuration"
+            target="_blank"
+            rel="noopener noreferrer"
+            >Read the configuration reference on GitHub</a
+          >.
+        </p>
+      </section>
+      <section id="limitations">
+        <p class="eyebrow">CURRENT SCOPE</p>
+        <h2>Designed for a focused local MVP</h2>
+        <div class="two-col">
+          <div>
+            <h3>Core properties</h3>
+            <ul>
+              <li>Deterministic and local-first</li>
+              <li>Offline-capable core; no LLM required</li>
+              <li>Markdown and JSON reports</li>
+              <li>Explicit quality-threshold outcomes</li>
+            </ul>
+          </div>
+          <div>
+            <h3>Limitations</h3>
+            <ul>
+              <li>
+                Local repositories only; no GitHub pull-request integration or remote fetching
+              </li>
+              <li>Intentionally limited supported OpenAPI and TypeScript subsets</li>
+              <li>No automatic code fixes; scenarios are suggestions, not executable tests</li>
+              <li>Not a vulnerability scanner, complete SAST tool, or hosted service</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+    </main>
+    <footer>
+      <p>
+        <strong>DevGuard v0.1.0</strong> · Built for the CódigoFacilito Kiro Bootcamp
+        DevTools/Productivity challenge
+      </p>
+      <p>
+        Edwin Einsen Vásquez Velásquez ·
+        <a
+          href="https://github.com/ZarakiLancelot/devguard/blob/main/LICENSE"
+          target="_blank"
+          rel="noopener noreferrer"
+          >MIT License</a
+        >
+        ·
+        <a
+          href="https://github.com/ZarakiLancelot/devguard"
+          target="_blank"
+          rel="noopener noreferrer"
+          >GitHub repository</a
+        >
+      </p>
+    </footer>
+  </body>
+</html>

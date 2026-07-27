@@ -38,6 +38,10 @@ Privacy review passed: assets contain fictional data and exclude shell prompts, 
 
 The generated Book demo workspace and ignored visual-capture workspace must be cleaned after validation. These repository-relative PNGs are intentionally kept outside the npm package; README links use the GitHub repository rendering path after publication.
 
+## Static landing page
+
+A standalone deployment boundary now exists under `site/`, containing semantic HTML, a dependency-free stylesheet, and byte-identical copies of the four approved screenshots it displays. It makes no external runtime requests and has no deployment configuration. Local resource, responsive, accessibility, privacy, and package-boundary checks are required before any future deployment; deployment, AWS region selection, and hosting remain pending.
+
 ## Remaining external actions
 
 Before public publication, complete the final release decision and any required publication review. Repository creation or visibility changes, remotes, tags, releases, video, CI, hosted assets, and static-page deployment remain outside this slice.
