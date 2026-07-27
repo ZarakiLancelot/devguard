@@ -27,3 +27,6 @@ demo/.work/
 
 # Generated package verification workspace
 .tmp/package-verification/
+
+# Temporary visual asset capture workspace
+.tmp/visual-assets/

@@ -43,6 +43,8 @@ It builds the production CLI, recreates a deterministic fictional Book repositor
 - Findings: `4`
 - Scenarios: `4`
 
+![DevGuard verified Book demo](docs/assets/devguard-book-demo.png)
+
 The verified finding codes are:
 
 1. `contract.incompatible-type` — OpenAPI `pageCount` is an integer while the TypeScript declaration uses `string`.
@@ -163,6 +165,8 @@ The configuration schema also supports optional `risk.productionPatterns`, `test
 devguard analyze local --config <path> [--requirements <path>] [--output <path>] [--fail-below <score>] [--verbose]
 ```
 
+![DevGuard CLI help](docs/assets/devguard-cli-help.png)
+
 | Option                  | Required | Accepted value                  | Behavior                                                         |
 | ----------------------- | -------- | ------------------------------- | ---------------------------------------------------------------- |
 | `--config <path>`       | Yes      | Configuration-file path         | Loads the required `.devguard.yml` configuration.                |
@@ -205,12 +209,16 @@ DevGuard quality threshold not met.
 
 Exit `1` is a quality outcome, not an analysis crash: Markdown and JSON reports are published before the threshold is evaluated.
 
+![DevGuard quality-threshold behavior](docs/assets/devguard-thresholds.png)
+
 ## Reports
 
 Every successful analysis publishes both configured report files:
 
 - Markdown is the reviewer-readable report: repository comparisons, health score, summaries, findings, evidence, recommendations, suggested tests, and warnings.
 - JSON is the machine-readable serialized report model.
+
+![DevGuard Markdown health report](docs/assets/devguard-markdown-report.png)
 
 Reports include findings, deterministic scenario suggestions, score and label, and repository metadata. Findings and report collections use stable ordering where implemented. The JSON output is useful for local automation, but this MVP does not promise a separately versioned public JSON API.
 
