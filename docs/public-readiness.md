@@ -50,6 +50,6 @@ The static landing page is live at [https://d9ps2yzxvz3fa.cloudfront.net](https:
 
 Before public publication, complete the final release decision and any required publication review. Repository creation or visibility changes, remotes, tags, releases, video, CI, hosted assets, and static-page deployment remain outside this slice.
 
-## npm v0.1.1 preparation
+## npm v0.1.1 publication
 
-The GitHub-only `v0.1.0` artifact remains unchanged. `v0.1.1` is a documentation and distribution patch prepared from the updated source state, with no intended functional behavior change. Package verification remains required before manual npm publication protected by npm 2FA; trusted publishing is not configured. npm installation may resolve declared dependencies, while the installed analysis core remains offline-capable.
+The GitHub-only `v0.1.0` artifact remains unchanged. `v0.1.1` is a documentation and distribution patch with no intentional functional behavior change and is publicly available at https://www.npmjs.com/package/@edwineinsen/devguard. The exact `v0.1.1` GitHub Release artifact was checksum-verified before 2FA-protected manual npm publication; registry installation plus binary help/version verification passed. Trusted publishing is not configured. npm installation may resolve declared dependencies, while the installed analysis core remains offline-capable.
