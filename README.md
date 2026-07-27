@@ -235,6 +235,10 @@ Current health labels are:
 | `50–74`  | `HIGH_RISK`     |
 | `0–49`   | `CRITICAL_RISK` |
 
+## Static landing page
+
+The DevGuard static landing page is hosted through CloudFront: [https://d9ps2yzxvz3fa.cloudfront.net](https://d9ps2yzxvz3fa.cloudfront.net).
+
 ## Privacy, determinism, and offline operation
 
 Analysis runs locally. DevGuard does not require an LLM, does not require network access for core analysis, and does not execute untrusted target-project code. Reports contain repository-relative analysis information rather than configuration or workspace absolute paths.

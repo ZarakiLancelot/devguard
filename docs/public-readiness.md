@@ -42,6 +42,10 @@ The generated Book demo workspace and ignored visual-capture workspace must be c
 
 A standalone deployment boundary now exists under `site/`, containing semantic HTML, a dependency-free stylesheet, and byte-identical copies of the four approved screenshots it displays. It makes no external runtime requests and has no deployment configuration. Local resource, responsive, accessibility, privacy, and package-boundary checks are required before any future deployment; deployment, AWS region selection, and hosting remain pending.
 
+## Live static-site deployment
+
+The static landing page is live at [https://d9ps2yzxvz3fa.cloudfront.net](https://d9ps2yzxvz3fa.cloudfront.net), deployed reproducibly by the CloudFormation stack `devguard-static-site` in `us-east-1`. Its origin is a private S3 bucket with all Block Public Access settings, `BucketOwnerEnforced` ownership, S3-managed encryption, and no website hosting. CloudFront uses SigV4 Origin Access Control; direct anonymous S3 access is denied, while HTTPS delivery, HTTP-to-HTTPS redirect, the expected object inventory, and cache behavior were verified. No custom domain is configured. The deployment scripts include reproducible teardown; billing safeguards are managed separately and were left unchanged.
+
 ## Remaining external actions
 
 Before public publication, complete the final release decision and any required publication review. Repository creation or visibility changes, remotes, tags, releases, video, CI, hosted assets, and static-page deployment remain outside this slice.
